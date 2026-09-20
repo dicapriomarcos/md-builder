@@ -87,24 +87,80 @@ body.mvl-fullscreen .mvl-admin-wrap{position:fixed;inset:0;margin:0;z-index:1000
 .mvl-post-result:hover{background:#e7f1ff;color:#135e96}
 .mvl-topbar .mvl-toggle-variables{background:transparent;border:1px solid #3c434a;color:#fff;border-radius:3px;padding:4px 8px;cursor:pointer;line-height:1}
 .mvl-topbar .mvl-toggle-variables.is-active{background:#2271b1;border-color:#2271b1}
-.mvl-variables-panel{position:fixed;top:64px;left:50%;transform:translateX(-50%);width:520px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;background:#fff;border:1px solid #dcdcde;border-radius:4px;box-shadow:0 6px 20px #0004;z-index:100001}
-.mvl-variables-panel h2{font-size:13px;text-transform:uppercase;margin:0;padding:14px 14px 0;display:flex;justify-content:space-between;align-items:center}
-.mvl-variables-panel .mvl-close{border:0;background:transparent;cursor:pointer;font-size:16px;line-height:1;color:#646970}
-.mvl-variables-panel .mvl-tabs{margin:10px 14px 0}
-.mvl-variables-body{padding:0 14px;overflow:auto;flex:1}
-.mvl-variables-footer{border-top:1px solid #dcdcde;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px}
-.mvl-variables-status{color:#646970;font-size:12px}
-.mvl-font-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-.mvl-font-chip{display:inline-flex;align-items:center;gap:6px;background:#e7f1ff;color:#135e96;border-radius:14px;padding:4px 6px 4px 12px;font-size:12px}
-.mvl-font-chip button{border:0;background:transparent;color:#135e96;cursor:pointer;font-size:14px;line-height:1;padding:0 4px}
-.mvl-font-search{width:100%}
-.mvl-font-search-results{margin-top:6px;max-height:160px;overflow:auto;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
+
+/* ---------- Variables: overlay + panel ---------- */
+.mvl-modal-overlay{position:fixed;inset:0;background:rgba(29,35,39,.5);z-index:100001;animation:mvl-fade-in .12s ease}
+@keyframes mvl-fade-in{from{opacity:0}to{opacity:1}}
+.mvl-variables-panel{position:fixed;top:6vh;left:50%;transform:translateX(-50%);width:680px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;background:#fff;border-radius:10px;box-shadow:0 20px 60px #0005;z-index:100002;overflow:hidden}
+.mvl-variables-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #eceef0}
+.mvl-variables-header h2{margin:0;font-size:16px;font-weight:600;color:#1d2327;display:flex;align-items:center;gap:8px}
+.mvl-variables-header h2 .dashicons{color:#2271b1;font-size:20px;width:20px;height:20px}
+.mvl-variables-panel .mvl-close{border:0;background:#f3f4f5;color:#50575e;cursor:pointer;font-size:16px;line-height:1;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background .12s,color .12s}
+.mvl-variables-panel .mvl-close:hover{background:#e7f1ff;color:#135e96}
+.mvl-variables-tabs{display:flex;gap:6px;padding:14px 22px 0}
+.mvl-vtab{display:flex;align-items:center;gap:6px;background:transparent;border:0;border-radius:6px 6px 0 0;padding:9px 14px;cursor:pointer;font-size:13px;font-weight:600;color:#646970}
+.mvl-vtab .dashicons{font-size:16px;width:16px;height:16px}
+.mvl-vtab:hover{color:#1d2327;background:#f6f7f7}
+.mvl-vtab.is-active{color:#135e96;background:#e7f1ff}
+.mvl-variables-body{padding:20px 22px;overflow:auto;flex:1;background:#fbfbfc}
+.mvl-variables-footer{border-top:1px solid #eceef0;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff}
+.mvl-variables-status{color:#00a32a;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
+.mvl-variables-status::before{content:"";width:7px;height:7px;border-radius:50%;background:#00a32a}
+.mvl-variables-status.is-dirty{color:#996800}
+.mvl-variables-status.is-dirty::before{background:#dba617}
+
+/* ---------- Variables: cards & fields (compartido por las 3 pestañas) ---------- */
+.mvl-vcard{background:#fff;border:1px solid #e2e4e7;border-radius:8px;padding:18px;margin-bottom:16px}
+.mvl-vcard:last-child{margin-bottom:0}
+.mvl-vcard-head{margin-bottom:14px}
+.mvl-vcard-head h3{margin:0 0 4px;font-size:14px;font-weight:600;color:#1d2327}
+.mvl-vcard-head p{margin:0;font-size:12px;color:#757b81;line-height:1.5}
+.mvl-vfield{display:block;font-weight:600;font-size:12px;color:#3c434a;margin:0}
+.mvl-vfield input,.mvl-vfield select{width:100%;margin-top:6px;font-weight:400}
+.mvl-vfield input[type="color"]{width:44px;height:32px;padding:2px;cursor:pointer}
+.mvl-vgrid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;margin-top:4px}
+.mvl-vcard-add{display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #b6c8e0;color:#2271b1;font-weight:600;font-size:13px;cursor:pointer;background:#f5f9ff;transition:background .12s,border-color .12s}
+.mvl-vcard-add:hover{background:#e7f1ff;border-color:#2271b1}
+.mvl-vcard-add .dashicons{font-size:18px;width:18px;height:18px}
+
+/* ---------- Fuentes ---------- */
+.mvl-font-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.mvl-font-chip{display:inline-flex;align-items:center;gap:6px;background:#e7f1ff;color:#135e96;border-radius:16px;padding:6px 8px 6px 14px;font-size:12px;font-weight:600}
+.mvl-font-chip button{border:0;background:rgba(19,94,150,.12);color:#135e96;cursor:pointer;font-size:13px;line-height:1;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.mvl-font-chip button:hover{background:#135e96;color:#fff}
+.mvl-font-search-wrap{position:relative}
+.mvl-font-search-wrap .dashicons{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8c8f94;font-size:16px;width:16px;height:16px}
+.mvl-font-search{width:100%;padding-left:32px!important}
+.mvl-font-search-results{margin-top:10px;max-height:170px;overflow:auto;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
 .mvl-font-search-results:empty{display:none}
-.mvl-font-result{border:1px solid #dcdcde;background:#f6f7f7;border-radius:3px;padding:4px 8px;cursor:pointer;font-size:12px}
+.mvl-font-result{border:1px solid #e2e4e7;background:#f6f7f7;border-radius:16px;padding:5px 12px;cursor:pointer;font-size:12px;transition:background .1s,border-color .1s}
 .mvl-font-result:hover{background:#e7f1ff;border-color:#2271b1;color:#135e96}
-.mvl-typo-role{border-top:1px solid #f0f0f1;padding-top:8px;margin-top:8px}
-.mvl-typo-role:first-of-type{border-top:0;padding-top:0;margin-top:0}
-.mvl-button-style-card{border:1px solid #dcdcde;border-radius:4px;padding:12px;margin:12px 0}
-.mvl-button-style-head{display:flex;gap:8px;align-items:center;margin-bottom:6px}
-.mvl-button-style-head input{flex:1;font-weight:600}
+.mvl-typo-role-list{display:flex;flex-direction:column;gap:14px}
+.mvl-typo-role{display:flex;gap:14px;padding-top:14px;border-top:1px solid #eceef0}
+.mvl-typo-role:first-child{padding-top:0;border-top:0}
+.mvl-typo-role-badge{flex:none;width:44px;height:44px;border-radius:8px;background:#1d2327;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600}
+.mvl-typo-role-fields{flex:1;min-width:0}
+.mvl-typo-role-label{margin:0 0 8px;font-size:12px;font-weight:700;color:#1d2327;text-transform:uppercase;letter-spacing:.02em}
+.mvl-typo-fields{margin:0}
+.mvl-typo-fields.mvl-field-group{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.mvl-typo-fields .mvl-group-label{grid-column:1/-1}
+.mvl-typo-fields-hint{grid-column:1/-1;margin:2px 0 0}
+
+/* ---------- Estilos de botón ---------- */
+.mvl-btn-card{background:#fff;border:1px solid #e2e4e7;border-radius:8px;margin-bottom:16px;overflow:hidden}
+.mvl-btn-card-preview{display:flex;align-items:center;justify-content:center;padding:28px 18px;background:repeating-conic-gradient(#f0f0f1 0 25%,#fafafb 0 50%) 0 0/20px 20px}
+.mvl-btn-preview{display:inline-block;text-decoration:none;line-height:1.4;font-family:inherit;box-shadow:0 1px 2px #0002}
+.mvl-btn-card-body{padding:16px 18px 18px;border-top:1px solid #eceef0}
+.mvl-btn-card-row{display:flex;gap:8px;align-items:center;margin-bottom:14px}
+.mvl-btn-card-name{flex:1;font-weight:600;font-size:14px;border:1px solid #e2e4e7;border-radius:6px;padding:8px 10px}
+.mvl-icon-btn{flex:none;width:32px;height:32px;border-radius:6px;border:1px solid #e2e4e7;background:#fff;color:#646970;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.mvl-icon-btn .dashicons{font-size:16px;width:16px;height:16px}
+.mvl-icon-btn-danger:hover{background:#fcf0f1;border-color:#e65054;color:#d63638}
+.mvl-btn-card-subhead{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#8c8f94;margin:14px 0 6px}
+.mvl-btn-typo-toggle{margin-top:14px;border-top:1px solid #eceef0;padding-top:10px}
+.mvl-btn-typo-toggle summary{cursor:pointer;font-size:12px;font-weight:700;color:#2271b1;list-style:none}
+.mvl-btn-typo-toggle summary::-webkit-details-marker{display:none}
+.mvl-btn-typo-toggle summary::before{content:"▸ ";display:inline-block}
+.mvl-btn-typo-toggle[open] summary::before{content:"▾ "}
+.mvl-btn-typo-toggle .mvl-typo-fields{margin-top:12px}
 

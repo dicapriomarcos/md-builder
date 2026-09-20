@@ -250,15 +250,15 @@
   function typographyFieldsHtml(ref, typo, opts) {
     opts = opts || {};
     var registered = state.variables.fonts.registered;
-    var html = '<div class="mvl-field-group">';
+    var html = '<div class="mvl-field-group mvl-typo-fields">';
     if (opts.label) html += '<label class="mvl-group-label">' + opts.label + '</label>';
-    html += '<label>Fuente<select data-typo="' + ref + '" data-typo-key="family"><option value="">' + esc(opts.inheritLabel || 'Predeterminado del tema') + '</option>'
+    html += '<label class="mvl-vfield">Fuente<select data-typo="' + ref + '" data-typo-key="family"><option value="">' + esc(opts.inheritLabel || 'Predeterminado del tema') + '</option>'
       + registered.map(function (f) { return '<option value="' + escAttr(f) + '" ' + (typo.family === f ? 'selected' : '') + '>' + esc(f) + '</option>'; }).join('')
       + '</select></label>';
-    html += '<label>Tamaño <span class="mvl-hint">(px, em, rem...)</span><input data-typo="' + ref + '" data-typo-key="size" type="text" placeholder="Auto" value="' + escAttr(typo.size) + '"></label>';
-    html += '<label>Estilo<select data-typo="' + ref + '" data-typo-key="variant">' + Object.keys(fontVariantLabels).map(function (k) { return '<option value="' + k + '" ' + (typo.variant === k ? 'selected' : '') + '>' + fontVariantLabels[k] + '</option>'; }).join('') + '</select></label>';
-    html += '<label>Transformación<select data-typo="' + ref + '" data-typo-key="transform">' + Object.keys(textTransformLabels).map(function (k) { return '<option value="' + k + '" ' + (typo.transform === k ? 'selected' : '') + '>' + textTransformLabels[k] + '</option>'; }).join('') + '</select></label>';
-    if (!registered.length) html += '<p class="mvl-hint">Registra fuentes en Variables → Fuentes para poder elegirlas aquí.</p>';
+    html += '<label class="mvl-vfield">Tamaño <span class="mvl-hint">(px, em, rem...)</span><input data-typo="' + ref + '" data-typo-key="size" type="text" placeholder="Auto" value="' + escAttr(typo.size) + '"></label>';
+    html += '<label class="mvl-vfield">Estilo<select data-typo="' + ref + '" data-typo-key="variant">' + Object.keys(fontVariantLabels).map(function (k) { return '<option value="' + k + '" ' + (typo.variant === k ? 'selected' : '') + '>' + fontVariantLabels[k] + '</option>'; }).join('') + '</select></label>';
+    html += '<label class="mvl-vfield">Transformación<select data-typo="' + ref + '" data-typo-key="transform">' + Object.keys(textTransformLabels).map(function (k) { return '<option value="' + k + '" ' + (typo.transform === k ? 'selected' : '') + '>' + textTransformLabels[k] + '</option>'; }).join('') + '</select></label>';
+    if (!registered.length) html += '<p class="mvl-hint mvl-typo-fields-hint">Registrá fuentes en la pestaña Fuentes para poder elegirlas acá.</p>';
     html += '</div>';
     return html;
   }
@@ -268,6 +268,20 @@
     if (ref.indexOf('role:') === 0) return state.variables.fonts.typography[ref.slice(5)] || null;
     if (ref.indexOf('btn:') === 0) { var st = state.variables.buttonStyles[Number(ref.slice(4))]; return st ? st.typography : null; }
     return null;
+  }
+
+  /** Mini vista previa "Aa" de un rol tipográfico (familia/estilo/transformación en vivo, sin esperar a guardar). */
+  function typoPreviewCss(typo) {
+    var decl = '';
+    if (typo.family) decl += 'font-family:"' + typo.family + '",sans-serif;';
+    if (typo.variant && typo.variant !== 'regular') decl += variantCssJs(typo.variant);
+    if (typo.transform && typo.transform !== 'none') decl += 'text-transform:' + typo.transform + ';';
+    return decl;
+  }
+  function updateTypoPreview(ref) {
+    var typo = resolveTypoTarget(ref);
+    var el = document.querySelector('[data-typo-preview="' + ref + '"]');
+    if (typo && el) el.setAttribute('style', typoPreviewCss(typo));
   }
 
   function imageContentFields(item) {
@@ -509,7 +523,11 @@
   }
 
   function variablesGeneralPanel(v) {
-    return '<label>Ancho máximo del contenedor <span class="mvl-hint">(px, %, em, rem, vh, vw)</span><input data-var-field="containerMaxWidth" type="text" value="' + escAttr(v.containerMaxWidth) + '"></label>';
+    return '<div class="mvl-vcard">'
+      + '<div class="mvl-vcard-head"><h3>Ancho del sitio</h3><p>Ancho máximo del contenido de cualquier página maquetada con este plugin.</p></div>'
+      + '<label class="mvl-vfield">Ancho máximo del contenedor <span class="mvl-hint">px, %, em, rem, vh, vw</span>'
+      + '<input data-var-field="containerMaxWidth" type="text" value="' + escAttr(v.containerMaxWidth) + '"></label>'
+      + '</div>';
   }
 
   function renderFontResults(term, box) {
@@ -523,21 +541,33 @@
       : '<p class="mvl-empty">Sin resultados.</p>';
   }
 
+  var typographyRoleIcons = { h1: 'H1', h2: 'H2', h3: 'H3', h4: 'H4', h5: 'H5', h6: 'H6', paragraph: '¶' };
+
   function variablesFontsPanel(v) {
-    var html = '<div class="mvl-field-group"><label class="mvl-group-label">Fuentes registradas <span class="mvl-hint">(máx. ' + MAX_REGISTERED_FONTS + ', se descargan y se sirven localmente — el resto de Google Fonts no se carga en el front)</span></label>';
-    html += '<div class="mvl-font-chips">' + v.fonts.registered.map(function (f) { return '<span class="mvl-font-chip">' + esc(f) + '<button type="button" data-remove-font="' + escAttr(f) + '" title="Quitar">×</button></span>'; }).join('') + '</div>';
+    var html = '<div class="mvl-vcard">';
+    html += '<div class="mvl-vcard-head"><h3>Fuentes de Google</h3><p>Elegí hasta ' + MAX_REGISTERED_FONTS + '. Se descargan y se sirven desde tu propio sitio — el resto de Google Fonts nunca se carga en el front.</p></div>';
+    html += '<div class="mvl-font-chips">' + (v.fonts.registered.length
+      ? v.fonts.registered.map(function (f) { return '<span class="mvl-font-chip">' + esc(f) + '<button type="button" data-remove-font="' + escAttr(f) + '" title="Quitar">×</button></span>'; }).join('')
+      : '<p class="mvl-empty">Todavía no registraste ninguna fuente.</p>') + '</div>';
     if (v.fonts.registered.length < MAX_REGISTERED_FONTS) {
-      html += '<input type="text" class="mvl-font-search" data-action="font-search" placeholder="Buscar en Google Fonts…" autocomplete="off">';
+      html += '<div class="mvl-font-search-wrap"><span class="dashicons dashicons-search"></span><input type="text" class="mvl-font-search" data-action="font-search" placeholder="Buscar en Google Fonts…" autocomplete="off"></div>';
       html += '<div class="mvl-font-search-results"></div>';
     } else {
-      html += '<p class="mvl-hint">Llegaste al máximo de fuentes registradas; quita una para añadir otra.</p>';
+      html += '<p class="mvl-hint">Llegaste al máximo de fuentes registradas; quitá una para añadir otra.</p>';
     }
     html += '</div>';
-    html += '<div class="mvl-field-group"><label class="mvl-group-label">Tipografía por rol</label>';
+    html += '<div class="mvl-vcard">';
+    html += '<div class="mvl-vcard-head"><h3>Tipografía por rol</h3><p>Cómo se ven por defecto los títulos y párrafos en todo el sitio.</p></div>';
+    html += '<div class="mvl-typo-role-list">';
     Object.keys(typographyRoleLabels).forEach(function (role) {
-      html += '<div class="mvl-typo-role"><p class="mvl-type">' + typographyRoleLabels[role] + '</p>' + typographyFieldsHtml('role:' + role, v.fonts.typography[role], { inheritLabel: 'Predeterminado del tema' }) + '</div>';
+      var ref = 'role:' + role;
+      html += '<div class="mvl-typo-role">'
+        + '<div class="mvl-typo-role-badge" data-typo-preview="' + ref + '" style="' + typoPreviewCss(v.fonts.typography[role]) + '">' + typographyRoleIcons[role] + '</div>'
+        + '<div class="mvl-typo-role-fields"><p class="mvl-typo-role-label">' + typographyRoleLabels[role] + '</p>'
+        + typographyFieldsHtml(ref, v.fonts.typography[role], { inheritLabel: 'Predeterminado del tema' })
+        + '</div></div>';
     });
-    html += '</div>';
+    html += '</div></div>';
     return html;
   }
 
@@ -553,40 +583,74 @@
     };
   }
 
+  /** CSS inline para la mini vista previa en vivo de un estilo de botón (ver .mvl-btn-preview). */
+  function buttonStylePreviewCss(style) {
+    var decl = 'color:' + style.textColor + ';';
+    decl += style.background.type === 'color' ? 'background:' + style.background.color + ';' : 'background:transparent;';
+    decl += 'border-radius:' + cssLength(style.border.radius) + ';';
+    decl += style.border.style && style.border.style !== 'none' ? 'border:' + cssLength(style.border.width) + ' ' + style.border.style + ' ' + style.border.color + ';' : 'border:none;';
+    decl += 'padding:' + paddingCss(style.padding) + ';';
+    if (style.typography.family) decl += 'font-family:"' + style.typography.family + '",sans-serif;';
+    if (style.typography.size) decl += 'font-size:' + cssLength(style.typography.size) + ';';
+    if (style.typography.variant && style.typography.variant !== 'regular') decl += variantCssJs(style.typography.variant);
+    if (style.typography.transform && style.typography.transform !== 'none') decl += 'text-transform:' + style.typography.transform + ';';
+    return decl;
+  }
+  function updateButtonPreview(idx) {
+    var style = state.variables.buttonStyles[idx];
+    var el = document.querySelector('.mvl-btn-preview[data-preview-idx="' + idx + '"]');
+    if (!style || !el) return;
+    el.setAttribute('style', buttonStylePreviewCss(style));
+    el.textContent = style.name || 'Botón';
+  }
+
   function variablesButtonsPanel(v) {
-    var html = '<div class="mvl-field-group"><button type="button" class="button" data-action="add-button-style">+ Nuevo estilo de botón</button></div>';
-    if (!v.buttonStyles.length) html += '<p class="mvl-empty">Todavía no hay estilos de botón. Crea uno y luego elígelo desde el botón en el lienzo (pestaña Contenido).</p>';
+    var html = '<div class="mvl-vcard-head"><h3>Estilos de botón</h3><p>Diseñalos acá una vez y elegilos por nombre en cualquier botón del lienzo.</p></div>';
+    html += '<div class="mvl-vcard mvl-vcard-add" data-action="add-button-style" role="button" tabindex="0"><span class="dashicons dashicons-plus-alt2"></span>Nuevo estilo de botón</div>';
     v.buttonStyles.forEach(function (style, idx) {
-      html += '<div class="mvl-button-style-card">';
-      html += '<div class="mvl-button-style-head"><input type="text" data-btnstyle-field="' + idx + '.name" value="' + escAttr(style.name) + '" placeholder="Nombre del estilo"><button type="button" class="mvl-reset" data-remove-button-style="' + idx + '">Eliminar</button></div>';
-      html += '<label>Color de fondo<input type="color" data-btnstyle-field="' + idx + '.background.color" value="' + escAttr(style.background.color) + '"></label>';
-      html += '<label>Color de texto<input type="color" data-btnstyle-field="' + idx + '.textColor" value="' + escAttr(style.textColor) + '"></label>';
-      html += '<label>Borde<select data-btnstyle-field="' + idx + '.border.style">' + Object.keys(borderStyles).map(function (s) { return '<option value="' + s + '" ' + (style.border.style === s ? 'selected' : '') + '>' + borderStyles[s] + '</option>'; }).join('') + '</select></label>';
+      html += '<div class="mvl-btn-card">';
+      html += '<div class="mvl-btn-card-preview"><span class="mvl-btn-preview" data-preview-idx="' + idx + '" style="' + buttonStylePreviewCss(style) + '">' + esc(style.name || 'Botón') + '</span></div>';
+      html += '<div class="mvl-btn-card-body">';
+      html += '<div class="mvl-btn-card-row">'
+        + '<input type="text" class="mvl-btn-card-name" data-btnstyle-field="' + idx + '.name" value="' + escAttr(style.name) + '" placeholder="Nombre del estilo">'
+        + '<button type="button" class="mvl-icon-btn mvl-icon-btn-danger" data-remove-button-style="' + idx + '" title="Eliminar"><span class="dashicons dashicons-trash"></span></button>'
+        + '</div>';
+      html += '<div class="mvl-vgrid-2">';
+      html += '<label class="mvl-vfield">Fondo<input type="color" data-btnstyle-field="' + idx + '.background.color" value="' + escAttr(style.background.color) + '"></label>';
+      html += '<label class="mvl-vfield">Texto<input type="color" data-btnstyle-field="' + idx + '.textColor" value="' + escAttr(style.textColor) + '"></label>';
+      html += '<label class="mvl-vfield">Borde<select data-btnstyle-field="' + idx + '.border.style">' + Object.keys(borderStyles).map(function (s) { return '<option value="' + s + '" ' + (style.border.style === s ? 'selected' : '') + '>' + borderStyles[s] + '</option>'; }).join('') + '</select></label>';
+      html += '<label class="mvl-vfield">Radio<input type="text" data-btnstyle-field="' + idx + '.border.radius" value="' + escAttr(style.border.radius) + '"></label>';
       if (style.border.style !== 'none') {
-        html += '<label>Grosor de borde<input type="text" data-btnstyle-field="' + idx + '.border.width" value="' + escAttr(style.border.width) + '"></label>';
-        html += '<label>Color de borde<input type="color" data-btnstyle-field="' + idx + '.border.color" value="' + escAttr(style.border.color) + '"></label>';
+        html += '<label class="mvl-vfield">Grosor de borde<input type="text" data-btnstyle-field="' + idx + '.border.width" value="' + escAttr(style.border.width) + '"></label>';
+        html += '<label class="mvl-vfield">Color de borde<input type="color" data-btnstyle-field="' + idx + '.border.color" value="' + escAttr(style.border.color) + '"></label>';
       }
-      html += '<label>Radio de borde<input type="text" data-btnstyle-field="' + idx + '.border.radius" value="' + escAttr(style.border.radius) + '"></label>';
-      html += '<div class="mvl-padding-grid">' + ['top', 'right', 'bottom', 'left'].map(function (side) { return '<label class="mvl-padding-side">' + sideLabels[side] + '<input data-btnstyle-field="' + idx + '.padding.' + side + '" type="text" value="' + escAttr(style.padding[side]) + '"></label>'; }).join('') + '</div>';
-      html += typographyFieldsHtml('btn:' + idx, style.typography, { label: 'Tipografía del botón', inheritLabel: 'Predeterminado' });
       html += '</div>';
+      html += '<p class="mvl-btn-card-subhead">Relleno</p>';
+      html += '<div class="mvl-padding-grid">' + ['top', 'right', 'bottom', 'left'].map(function (side) { return '<label class="mvl-padding-side">' + sideLabels[side] + '<input data-btnstyle-field="' + idx + '.padding.' + side + '" type="text" value="' + escAttr(style.padding[side]) + '"></label>'; }).join('') + '</div>';
+      html += '<details class="mvl-btn-typo-toggle"><summary>Tipografía del botón</summary>' + typographyFieldsHtml('btn:' + idx, style.typography, { inheritLabel: 'Predeterminado' }) + '</details>';
+      html += '</div></div>';
     });
     return html;
   }
 
+  var variablesTabIcons = { general: 'dashicons-editor-expand', fonts: 'dashicons-editor-spellcheck', buttons: 'dashicons-button' };
+
   function variablesPanelHtml() {
     var v = state.variables;
     var tab = state.variablesTab || 'general';
-    var tabs = [['general', 'General'], ['fonts', 'Fuentes'], ['buttons', 'Estilos de botón']];
-    var html = '<div class="mvl-variables-panel"><h2>Variables<button class="mvl-close" data-action="toggle-variables" title="Cerrar">×</button></h2>';
-    html += '<div class="mvl-tabs">' + tabs.map(function (t) { return '<button class="mvl-tab' + (tab === t[0] ? ' is-active' : '') + '" data-variables-tab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    var tabs = [['general', 'General'], ['fonts', 'Fuentes'], ['buttons', 'Botones']];
+    var html = '<div class="mvl-variables-root">';
+    html += '<div class="mvl-modal-overlay" data-action="toggle-variables"></div>';
+    html += '<div class="mvl-variables-panel">';
+    html += '<div class="mvl-variables-header"><h2><span class="dashicons dashicons-admin-customizer"></span>Variables</h2><button class="mvl-close" data-action="toggle-variables" title="Cerrar">×</button></div>';
+    html += '<div class="mvl-variables-tabs">' + tabs.map(function (t) { return '<button class="mvl-vtab' + (tab === t[0] ? ' is-active' : '') + '" data-variables-tab="' + t[0] + '"><span class="dashicons ' + variablesTabIcons[t[0]] + '"></span>' + t[1] + '</button>'; }).join('') + '</div>';
     html += '<div class="mvl-variables-body">';
     if (tab === 'general') html += variablesGeneralPanel(v);
     if (tab === 'fonts') html += variablesFontsPanel(v);
     if (tab === 'buttons') html += variablesButtonsPanel(v);
     html += '</div>';
-    html += '<div class="mvl-variables-footer"><span class="mvl-variables-status">' + (state.variablesDirty ? 'Cambios sin guardar' : 'Guardado') + '</span><button type="button" class="button button-primary" data-action="save-variables">Guardar variables</button></div>';
-    html += '</div>';
+    html += '<div class="mvl-variables-footer"><span class="mvl-variables-status' + (state.variablesDirty ? ' is-dirty' : '') + '">' + (state.variablesDirty ? 'Cambios sin guardar' : 'Guardado') + '</span><button type="button" class="button button-primary" data-action="save-variables">Guardar variables</button></div>';
+    html += '</div></div>';
     return html;
   }
 
@@ -628,6 +692,7 @@
 
     container.querySelectorAll('[data-action="add-button-style"]').forEach(function (b) {
       b.onclick = function () { state.variables.buttonStyles.push(newButtonStyle()); markVariablesDirty(); };
+      b.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); b.click(); } });
     });
 
     container.querySelectorAll('[data-remove-button-style]').forEach(function (b) {
@@ -643,7 +708,9 @@
         var obj = style;
         for (var i = 0; i < path.length - 1; i++) obj = obj[path[i]];
         obj[path[path.length - 1]] = el.value;
-        if (path[path.length - 1] === 'style' && path[0] === 'border') markVariablesDirty(); else markVariablesDirtyLite();
+        if (path[path.length - 1] === 'style' && path[0] === 'border') { markVariablesDirty(); return; }
+        updateButtonPreview(idx);
+        markVariablesDirtyLite();
       });
     });
 
@@ -709,10 +776,14 @@
 
     container.querySelectorAll('[data-typo]').forEach(function (el) {
       el.addEventListener('input', function () {
-        var typo = resolveTypoTarget(el.dataset.typo);
+        var ref = el.dataset.typo;
+        var typo = resolveTypoTarget(ref);
         if (!typo) return;
         typo[el.dataset.typoKey] = el.value;
-        if (el.dataset.typo === 'item') markDirtyLite(); else markVariablesDirtyLite();
+        if (ref === 'item') { markDirtyLite(); return; }
+        if (ref.indexOf('role:') === 0) updateTypoPreview(ref);
+        if (ref.indexOf('btn:') === 0) updateButtonPreview(Number(ref.slice(4)));
+        markVariablesDirtyLite();
       });
     });
 
@@ -1000,11 +1071,11 @@
       existingPanel.remove();
     }
 
-    var existingVariablesPanel = root.querySelector('.mvl-variables-panel');
+    var existingVariablesPanel = root.querySelector('.mvl-variables-root');
     if (state.showVariables) {
       var variablesHtml = variablesPanelHtml();
       if (existingVariablesPanel) { existingVariablesPanel.outerHTML = variablesHtml; } else { root.insertAdjacentHTML('beforeend', variablesHtml); }
-      var variablesPanel = root.querySelector('.mvl-variables-panel');
+      var variablesPanel = root.querySelector('.mvl-variables-root');
       // bindDynamicEvents trae el manejador genérico de [data-typo], compartido con
       // la tipografía de un bloque en el inspector (ver typographyFieldsHtml).
       bindDynamicEvents(variablesPanel);
