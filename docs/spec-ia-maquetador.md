@@ -24,9 +24,11 @@ layout: Section[]              // raíz, máx. 30 elementos
 Section.children: (Section | Item)[]   // máx. 50 elementos, máx. 4 niveles de anidación
 ```
 
-No existen otros tipos de nodo. No hay "columna", "fila", "grid" ni "espaciador"
-como bloques propios: las columnas se simulan con `section` anidadas dentro de una
-`section` con `flexDirection: row` (ver §7 y las limitaciones en §8).
+No existen otros tipos de nodo. No hay "columna" ni "espaciador" como bloques
+propios: las columnas se simulan con `section` anidadas dentro de una `section`
+padre — hoy con `display:"grid"` y `columns: N` para ancho parejo (recomendado,
+ver §2/§8.1/§11), o con el patrón más viejo `flexDirection:"row"` si se acepta que
+las columnas floten según su contenido (ver §7 y las limitaciones en §8).
 
 ### 1.1 Contrato de guardado
 
@@ -62,11 +64,15 @@ solo genera el array `layout`, el propio plugin se encarga de renderizarlo.
     "background":     ResponsiveValue<Background>,   // default: {type:"color", color:"#ffffff"}
     "border":         ResponsiveValue<Border>,        // default: {style:"none", width:"1px", color:"#000000", radius:"0px"}
     "tag":            "div" | "section" | "article",  // NO es responsive; default "section"
+    "classes":        string,    // NO es responsive; default ""; ver §4.6
+    "htmlId":         string,    // NO es responsive; default ""; ver §4.6
+    "display":        "flex" | "grid",  // NO es responsive; default "flex"; ver nota de grid abajo
+    "columns":        ResponsiveValue<int 1-12>,  // default 3; solo tiene efecto si display:"grid"
     "textAlign":      ResponsiveValue<"left"|"center"|"right">,  // default "left"
     "gap":            ResponsiveValue<SpacingSide>,   // default "16px"
-    "flexDirection":  ResponsiveValue<"row"|"column">, // default "column"
-    "justifyContent": ResponsiveValue<"flex-start"|"center"|"flex-end"|"space-between"|"space-around"|"space-evenly">, // default "flex-start"
-    "alignItems":     ResponsiveValue<"stretch"|"flex-start"|"center"|"flex-end">, // default "stretch"
+    "flexDirection":  ResponsiveValue<"row"|"column">, // default "column"; solo tiene efecto si display:"flex"
+    "justifyContent": ResponsiveValue<"flex-start"|"center"|"flex-end"|"space-between"|"space-around"|"space-evenly">, // default "flex-start"; solo si display:"flex"
+    "alignItems":     ResponsiveValue<"stretch"|"flex-start"|"center"|"flex-end">, // default "stretch"; solo si display:"flex"
     "padding":        ResponsiveValue<Spacing>,  // default {top:"48px", right:"24px", bottom:"48px", left:"24px"}
     "margin":         ResponsiveValue<Spacing>   // default {top:"0px", right:"0px", bottom:"0px", left:"0px"}
   },
@@ -78,16 +84,26 @@ Notas clave:
 
 - `tag` controla la etiqueta HTML del contenedor (`<section>`, `<div>` o
   `<article>`). Cualquier otro valor cae a `"section"`.
+- `display` elige el modelo de layout del **wrapper interno** `.mvl-container`
+  (hijo directo de la section): `"flex"` (default, el de siempre) o `"grid"`. Con
+  `"grid"`, `flexDirection`/`justifyContent`/`alignItems` no tienen efecto (se
+  siguen guardando pero se ignoran en el CSS) y en su lugar se usa `columns` para
+  fijar `grid-template-columns: repeat(N, 1fr)` — esto sí reparte el ancho de forma
+  pareja entre los hijos directos de esa section, a diferencia del flex (ver la
+  limitación de §8.1, que con `display:"grid"` deja de aplicar).
 - `flexDirection` / `justifyContent` / `alignItems` / `gap` controlan el
-  `display:flex` del **wrapper interno** `.mvl-container` (hijo directo de la
-  section, `max-width:1140px; margin:0 auto; flex-wrap:wrap`), **no** el `<section>`
-  en sí. En la práctica: esto define cómo se acomodan los **hijos directos** de esa
-  section entre sí.
+  `display:flex` del wrapper cuando `display` es `"flex"` (`max-width` viene de
+  Variables — ver §11 —, `margin:0 auto; flex-wrap:wrap` fijos), **no** el
+  `<section>` en sí. En la práctica: esto define cómo se acomodan los **hijos
+  directos** de esa section entre sí. `gap` también aplica en modo `"grid"`.
 - `textAlign` se aplica también a ese `.mvl-container` (texto centrado/alineado de
-  todo el contenido dentro).
+  todo el contenido dentro), en ambos modos.
 - No hay ninguna propiedad de ancho/alto para la section (`width`, `height`,
-  `flex-basis`, `flex-grow`, `min-height`, etc.). El único ancho fijo del sistema es
-  el `max-width:1140px` del `.mvl-container`.
+  `flex-basis`, `flex-grow`, `min-height`, etc.). El ancho máximo de
+  `.mvl-container` es una Variable global (§11), no una propiedad por section.
+- `classes`/`htmlId` agregan clases/un id HTML propios al `<section>`/`<div>`/
+  `<article>` renderizado, además de las clases fijas del plugin (`mvl-section`,
+  etc.) — ver §4.6.
 
 ---
 
@@ -105,7 +121,10 @@ como hijos de una `section` (no en la raíz).
     "background": ResponsiveValue<Background>, // default: {type:"none"}
     "border":     ResponsiveValue<Border>,      // default: {style:"none", ...}
     "padding":    ResponsiveValue<Spacing>,     // default: 0 en los 4 lados
-    "margin":     ResponsiveValue<Spacing>      // default: 0 en los 4 lados
+    "margin":     ResponsiveValue<Spacing>,     // default: 0 en los 4 lados
+    "classes":    string,          // NO es responsive; default ""; ver §4.6
+    "htmlId":     string,          // NO es responsive; default ""; ver §4.6
+    "typography": Typography       // NO es responsive; default vacío ("sin anular"); ver §4.6 y §11
   }
 }
 ```
@@ -113,13 +132,17 @@ como hijos de una `section` (no en la raíz).
 Un `Item` **no tiene** `textAlign`, `gap`, `flexDirection`, `justifyContent`,
 `alignItems` ni `tag`: esas propiedades solo existen en `Section`.
 
+`typography` solo tiene efecto visual en `heading`/`text`/`button` (se aplica al
+`<h{level}>`, al `.mvl-text` o al `.mvl-button` respectivamente); en un `image` se
+acepta igual en el JSON pero el sanitizador simplemente no lo usa en ningún lado.
+
 ### 3.1 `data` según `type`
 
 | `type`     | Campos de `data`                                                                 | Sanitización / límites |
 |------------|-----------------------------------------------------------------------------------|--------------------------|
 | `heading`  | `text: string`, `level: 1-6` (default 2)                                          | `text` se limpia con `sanitize_text_field` (se pierde cualquier HTML embebido, es texto plano) |
 | `text`     | `text: string` (puede llevar HTML simple)                                         | `text` pasa por `wp_kses_post` (permite `<p> <strong> <em> <a> <ul> <li> <br>`, etc., pero no `<script>` ni atributos peligrosos) y luego `wpautop()` en el render — **no hace falta que la IA agregue `<p>` manualmente**, los saltos de línea dobles ya generan párrafos |
-| `button`   | `text: string`, `url: string`                                                     | `url` pasa por `esc_url_raw`; si viene vacía el link queda en `#` en la preview |
+| `button`   | `text: string`, `textTag: string`, `url: string`, `urlTag: string`, `urlPostId: int`, `buttonStyle: string` | ver §3.2 (contenido dinámico) y §11.3 (`buttonStyle`, el id de un estilo de botón con nombre definido en Variables) |
 | `image`    | `url: string`, `alt: string`, `id: int` (attachment ID de WP), `size: string`      | `id` es el ID del adjunto en la Media Library; `size` es el "slug" de tamaño de imagen (`thumbnail`, `medium`, `medium_large`, `large`, `full`...) — **una IA sin acceso a la Media Library de ese sitio no puede inventar un `id` válido**, ver §8 |
 
 Ejemplo de `text` con HTML permitido:
@@ -127,6 +150,91 @@ Ejemplo de `text` con HTML permitido:
 ```json
 { "type": "text", "data": { "text": "Esto es <strong>importante</strong>.\n\nSegundo párrafo." } }
 ```
+
+### 3.2 Contenido dinámico del botón (al estilo "Dynamic Tags" de Elementor)
+
+El `button` es, por ahora, el único bloque con contenido dinámico. En vez de (o
+además de) un texto/URL fijo, se puede pedir que el texto y/o la URL se resuelvan
+automáticamente contra datos reales del post:
+
+```jsonc
+{
+  "type": "button",
+  "data": {
+    "text": "Saber más",   // valor estático / fallback — se usa si textTag es "" o si el tag resuelve vacío
+    "textTag": "",          // "" = usar "text" tal cual; o una de las claves de la tabla de abajo
+    "url": "#",             // valor estático / fallback — se usa si urlTag es "" o si el tag resuelve vacío
+    "urlTag": "",           // "" = usar "url" tal cual; o una de las claves de la tabla de abajo
+    "urlPostId": 0,         // solo se usa cuando urlTag empieza con "post_link_": ID (int) de la entrada/página/CPT destino
+    "buttonStyle": ""       // "" = estilo por defecto (.mvl-button); o el "id" de un estilo de botón con nombre de Variables (§11.3)
+  }
+}
+```
+
+Claves válidas de `textTag`:
+
+| Clave | Se resuelve a |
+|---|---|
+| `""` | (estático) usa `data.text` tal cual |
+| `post_title` | Título de la página/entrada donde vive este layout |
+| `site_title` | Nombre del sitio (`bloginfo('name')`) |
+| `author_name` | Nombre visible del autor del post |
+| `current_date` | Fecha (formato de fecha configurado en WordPress) |
+
+Claves válidas de `urlTag`:
+
+| Clave | Se resuelve a |
+|---|---|
+| `""` | (estático) usa `data.url` tal cual |
+| `post_url` | Permalink de la página/entrada donde vive este layout (la actual, no otra) |
+| `site_url` | URL de inicio del sitio |
+| `author_url` | Archivo de posts del autor |
+| `featured_image` | URL de la imagen destacada del post (en tamaño completo) |
+| `post_link_<post_type>` | Permalink de **otro** contenido del sitio, de un tipo concreto, elegido por su ID en `data.urlPostId` |
+
+`post_link_<post_type>` no es una clave fija: hay **una por cada tipo de contenido
+público con vista individual registrado en el sitio**, calculada en el momento de
+guardar (equivalente al selector "Post/Page" — o "Post/Page/CPT" — de los Dynamic
+Tags de Elementor, pero con una opción separada por tipo en vez de una genérica).
+En un sitio estándar de WordPress sin CPTs existen como mínimo:
+
+| Clave | Tipo |
+|---|---|
+| `post_link_page` | Página |
+| `post_link_post` | Entrada |
+
+Si el sitio tiene tipos de contenido personalizados públicos con vista individual
+(por ejemplo `product`, `proyecto`, `testimonio`...), también aparece
+`post_link_product`, `post_link_proyecto`, etc. — el slug es siempre el `post_type`
+tal como está registrado (`register_post_type('product', ...)` → `post_link_product`).
+Se excluyen `attachment` (adjuntos/medios) y cualquier post type que no sea público
+o no tenga una vista individual navegable (`is_post_type_viewable()`).
+
+Cualquier valor de `textTag`/`urlTag` que no esté en estas listas — incluyendo un
+`post_link_<algo>` cuyo `<algo>` no sea un post type real y público de ESE sitio —
+se sanitiza a `""` (estático). Si un tag resuelve a vacío (p. ej. `featured_image`
+en un post sin imagen destacada, o `post_link_<tipo>` con un `urlPostId` que ya no
+existe/fue borrado), el render usa el valor estático de `text`/`url` como fallback
+— por eso conviene dejar siempre un valor estático razonable aunque se use un tag.
+
+**Sobre `post_link_<post_type>` / `urlPostId`**: una IA que genera el JSON
+directamente (sin pasar por el buscador del editor) necesita conocer, para ESE
+sitio de WordPress en concreto: (1) qué post types públicos existen — se puede
+consultar con `GET /wp-json/wp/v2/types` — y (2) el ID real del contenido destino
+dentro de ese tipo — vía `GET /wp-json/wp/v2/pages`, `/wp-json/wp/v2/posts`, el
+endpoint REST propio del CPT, o `/wp-json/wp/v2/search?search=...&subtype=<tipo>`.
+**No hay que inventar ni el tipo ni el ID.** Un `urlPostId` que no corresponde a
+ningún contenido real cae al valor estático de `url` como fallback (no rompe nada,
+pero tampoco enlaza a donde se quería). Si no se tiene certeza, es más seguro usar
+`urlTag: ""` con la URL relativa como texto estático.
+
+⚠️ **Importante — esto NO es contenido dinámico "en vivo"**: al igual que el resto
+del layout, el HTML final del botón se resuelve y se "hornea" en `post_content`
+**en el momento de guardar** desde el maquetador, no en cada visita a la página. Si
+`textTag` es `post_title` y luego alguien cambia el título de la página, el botón
+seguirá mostrando el título viejo hasta que alguien vuelva a abrir el maquetador y
+guarde de nuevo. `current_date` en particular casi nunca tiene sentido tal como
+está implementado hoy, porque queda fija en la fecha del último guardado.
 
 ---
 
@@ -235,6 +343,50 @@ Si `style` es `"none"`, el borde no se dibuja aunque `width`/`color` tengan valo
 (un `border-radius` sin borde visible es válido, p. ej. para recortar imágenes de
 fondo con esquinas redondeadas).
 
+### 4.6 `classes`, `htmlId` y `Typography`
+
+`classes` y `htmlId` existen tanto en `Section` como en `Item` (§2 y §3):
+
+- `classes`: **un solo string** con las clases separadas por espacio (p. ej.
+  `"tarjeta destacada"`), no un array. Cada token se limpia por separado (solo
+  `A-Za-z0-9_-`; cualquier otro carácter se elimina del token) y se descartan los
+  tokens vacíos resultantes; máximo 20 tokens. Se agregan **además** de las clases
+  fijas del plugin (`mvl-section`, `mvl-item mvl-item-heading`, etc.), nunca las
+  reemplazan.
+- `htmlId`: un string que debe empezar por una letra y solo puede tener
+  `A-Za-z0-9_-` (regla básica de un id HTML válido); cualquier otro valor se
+  sanitiza a `""` (sin id). Máximo 64 caracteres. La IA es responsable de que sea
+  único dentro de la página — el sanitizador no lo comprueba.
+
+`Typography` es la forma compartida por el `settings.typography` de un `Item`
+(override puntual de un bloque), por cada rol global de Variables (§11.2:
+`h1`-`h6`/`paragraph`) y por la tipografía de un estilo de botón con nombre
+(§11.3):
+
+```jsonc
+{
+  "family":    string,   // "" = no anular/heredar; si no es "", debe ser exactamente una de las familias registradas en Variables (§11.1) — cualquier otro valor se sanitiza a ""
+  "size":      SpacingSide | "",  // "" = no anular/heredar
+  "variant":   "regular" | "italic" | "bold" | "bolditalic",  // default "regular" ("regular" = no anular peso/cursiva)
+  "transform": "none" | "uppercase" | "lowercase" | "capitalize"  // default "none" ("none" = no anular)
+}
+```
+
+- `family` **no** es una familia de fuente libre: la IA no puede poner cualquier
+  nombre de Google Fonts ahí. Solo funciona si esa familia ya está en
+  `fonts.registered` de las Variables guardadas del sitio (§11.1) — si no, se
+  sanitiza a `""` y el elemento hereda la fuente del tema/rol global. Antes de
+  generar un `family` no vacío, hay que conocer las fuentes ya registradas en ESE
+  sitio (por ejemplo consultando `GET /wp-json/mvl/v1/variables`, que requiere
+  sesión de wp-admin) — no hay forma de "registrar y usar" una fuente en el mismo
+  paso desde este endpoint de layout.
+- `variant` combina peso + cursiva en una sola opción (como los "variants" de
+  Google Fonts): `regular`→400, `italic`→400 cursiva, `bold`→700, `bolditalic`→700
+  cursiva. No hay pesos intermedios (300, 500, 600, 800...) en esta versión.
+- Todo lo que `Typography` sí anula se aplica con `!important` en el CSS generado
+  (a diferencia del resto del sistema de estilos), porque su objetivo es poder
+  pisar la tipografía del tema — ver §11.
+
 ---
 
 ## 5. IDs
@@ -259,6 +411,10 @@ fondo con esquinas redondeadas).
 | Ángulo de degradado | 0–360 |
 | Paradas de degradado | 2–6 |
 | Valores numéricos de spacing | -1000 a 1000 |
+| Columnas de un `Section` en modo `grid` | 1–12 |
+| Fuentes de Google registradas en Variables | 6 (§11.1) |
+| Estilos de botón con nombre en Variables | 12 (§11.3) |
+| Tokens de `classes` por `Section`/`Item` | 20 (§4.6) |
 
 Cualquier nodo que exceda estos límites o tenga un `type` desconocido **se
 descarta silenciosamente** al guardar, no genera error visible.
@@ -270,27 +426,34 @@ descarta silenciosamente** al guardar, no genera error visible.
 Cada `Section` se renderiza así:
 
 ```html
-<section class="mvl-section mvl-bg-host" data-mvl-uid="...">
-  <div class="mvl-container" style="max-width:1140px;margin:0 auto">
+<section class="mvl-section mvl-bg-host [+ classes]" data-mvl-uid="..." [id="..."]>
+  <div class="mvl-container">
     <!-- hijos: otras <section> o los .mvl-item de sus Items -->
   </div>
 </section>
 ```
 
-`.mvl-container` tiene `display:flex; flex-wrap:wrap` fijo por CSS base, y encima
-el CSS generado le agrega `flex-direction`, `justify-content`, `align-items`, `gap`
-y `text-align` según los `settings` de esa `Section`.
+`.mvl-container` ya no lleva el `max-width` en línea: viene de la Variable global
+`containerMaxWidth` (§11), aplicada por CSS a **todas** las `.mvl-container` del
+sitio con `!important` (para que gane incluso sobre HTML ya horneado en guardados
+anteriores). Por CSS base tiene `margin:0 auto`, y encima el CSS generado le agrega
+`display:flex` + `flex-direction`/`justify-content`/`align-items` (o `display:grid`
++ `grid-template-columns` si `display:"grid"`), `gap` y `text-align`, según los
+`settings` de esa `Section`.
 
 Cada `Item` se renderiza como:
 
 ```html
-<div class="mvl-item mvl-item-{type} mvl-bg-host" data-mvl-uid="...">
+<div class="mvl-item mvl-item-{type} mvl-bg-host [+ classes]" data-mvl-uid="..." [id="..."]>
   <!-- heading: <h{level}>texto</h{level}> -->
   <!-- text:    <div class="mvl-text">párrafos con wpautop</div> -->
-  <!-- button:  <p><a class="mvl-button" href="...">texto</a></p> -->
+  <!-- button:  <a class="mvl-button [mvl-btn-style-{buttonStyle}]" href="...">texto</a> (sin <p> envolvente) -->
   <!-- image:   <img class="mvl-image" src="..." alt="..."> -->
 </div>
 ```
+
+El `settings.typography` de un `Item` (§4.6) se aplica directamente al elemento de
+texto real (`h{level}`/`.mvl-text`/`.mvl-button`), no al `.mvl-item` que lo envuelve.
 
 Para hacer un layout de **"3 columnas"** el patrón es: una `Section` padre con
 `flexDirection: "row"` y `gap`, y **3 `Section` hijas** dentro (cada una funcionando
@@ -306,16 +469,27 @@ asumirlas ni inventar campos para ellas — cualquier campo que no esté en este
 documento simplemente se ignora al sanitizar:
 
 1. **No hay control de ancho por bloque/columna** (`width`, `flex-basis`,
-   `flex-grow`, `%` de columna). Un layout de "3 columnas iguales" con
-   `flexDirection: row` no reparte el espacio automáticamente: cada hija ocupa el
-   ancho de su contenido y el `flex-wrap:wrap` hace que si no entran en una fila,
-   bajen a la siguiente. Si el usuario pide columnas de ancho parejo, hoy no hay
-   forma de lograrlo solo con JSON — es una limitación real del plugin, no algo que
-   la IA pueda resolver con datos.
-2. **No hay `width`/`height`/`min-height` en ningún nivel.**
-3. **No hay control de tipografía** (tamaño de fuente, familia, peso, color de
-   texto, line-height) fuera del `<h1>-<h6>` semántico y los estilos del tema
-   activo. Todo lo tipográfico depende del CSS del tema.
+   `flex-grow`, `%` de columna) **en modo `flex`**. Un layout de "3 columnas
+   iguales" con `flexDirection: row` no reparte el espacio automáticamente: cada
+   hija ocupa el ancho de su contenido y el `flex-wrap:wrap` hace que si no entran
+   en una fila, bajen a la siguiente. **Desde que existe `display:"grid"` (§2) esto
+   ya tiene solución real**: una `Section` padre con `display:"grid"` y
+   `columns: N` reparte el ancho de forma pareja entre sus hijas directas — es la
+   forma recomendada de hacer columnas de ancho igual hoy, en vez del patrón viejo
+   de §7 con `flexDirection:"row"`.
+2. **No hay `width`/`height`/`min-height` en ningún nivel**, ni siquiera en modo
+   `grid` (no hay `grid-template-rows`, `min-height` de fila, etc.), más allá del
+   número de columnas.
+3. ~~No hay control de tipografía~~ **Ya existe control de tipografía real**, pero
+   con dos capas distintas — no confundirlas:
+   - **Variables (§11)**: tipografía **global** por rol semántico (`h1`-`h6` y
+     "párrafo"), de sitio entero, independiente del `layout` de cada página.
+   - **`settings.typography` de un `Item`** (§4.6): override puntual de **ese
+     bloque en particular**, que gana sobre el rol global correspondiente.
+   En ambos casos, `family` solo puede ser una fuente ya registrada en Variables
+   (§11.1) — no cualquier fuente de Google Fonts libremente — y no hay control de
+   `line-height`, `letter-spacing` ni color de texto (fuera del color que ya trae
+   un estilo de botón, §11.3).
 4. **`image.data.id`** (attachment ID de la Media Library) no lo puede inventar una
    IA sin conocer el sitio real: si no se tiene un ID válido, lo más seguro es
    dejar `id: 0` y usar `url` con una imagen externa, o dejar el bloque de imagen
@@ -323,18 +497,29 @@ documento simplemente se ignora al sanitizar:
 5. **No hay bloques de "columna" ni "espaciador" ni "separador" ni "video embed de
    YouTube/Vimeo"** — solo `heading`, `text`, `button`, `image`, y el contenedor
    `section`. Un video de fondo sí existe (`background.type: "video"`, con URL de
-   archivo `.mp4` directo, no embed de plataforma).
-6. **El botón (`button`) no tiene variantes de estilo** propias (tamaño, color,
-   contorno vs. relleno) más allá de las clases fijas `.mvl-button` definidas en
-   CSS del tema/preview — su color/tamaño no se controla desde el JSON del layout,
-   solo su `background`/`border`/`padding`/`margin` del **contenedor** que lo
-   envuelve (el `<p>` alrededor del link no es un nodo separado).
-7. `justifyContent`/`alignItems`/`flexDirection`/`gap`/`textAlign` solo se pueden
-   fijar en `Section`, nunca en un `Item` individual.
-
-Si en algún momento se quiere que la IA genere columnas de verdad, la solución real
-es agregar al plugin un campo de ancho/flex-basis por hijo (fuera del alcance de
-este documento — es una mejora al plugin, no al spec).
+   archivo `.mp4` directo, no embed de plataforma). Para columnas de ancho parejo,
+   usar `section` con `display:"grid"` (punto 1) en vez de inventar un bloque de
+   "columna".
+6. ~~El botón no tiene variantes de estilo propias~~ **Ya existe**: un estilo de
+   botón con nombre en Variables (§11.3) define color de fondo, color de texto,
+   borde y tipografía, y se aplica con `data.buttonStyle: "<id>"` (§3.1) — igual
+   que con las fuentes, el `id` tiene que existir ya en las Variables guardadas del
+   sitio, no se puede inventar. Sin `buttonStyle` (`""`), el botón sigue usando la
+   clase fija `.mvl-button` del tema/preview tal como antes. El
+   `background`/`border`/`padding`/`margin` del propio `Item` (§3) se siguen
+   aplicando al `.mvl-item` que envuelve el link, no al `<a>` — son dos capas
+   independientes (la del `Item` envolvente y la del `buttonStyle` del link).
+7. `justifyContent`/`alignItems`/`flexDirection`/`gap`/`textAlign`/`display`/
+   `columns` solo se pueden fijar en `Section`, nunca en un `Item` individual.
+8. **El contenido dinámico (§3.2) solo existe en el botón** (`textTag`/`urlTag`), y
+   ni siquiera ahí es "en vivo": se resuelve al guardar, no en cada visita (ver la
+   advertencia en §3.2). No hay dynamic tags para `heading`, `text`, `image` ni
+   para ningún `settings` (por ejemplo, no se puede poner "el color destacado del
+   post" como fondo).
+9. **`classes`/`htmlId`/`typography`/`display`/`columns`/Variables no son
+   responsive** (§4.1): no hay forma de, por ejemplo, cambiar el tamaño de fuente
+   solo en mobile, más allá de las 12 columnas de grid que sí son
+   `ResponsiveValue<int>`.
 
 ---
 
@@ -348,11 +533,19 @@ este documento — es una mejora al plugin, no al spec).
 3. Todo ajuste de estilo va envuelto en `{desktop, tablet, mobile}`, con
    `tablet`/`mobile` en `null` salvo que se pida una diferencia real por
    dispositivo.
-4. No inventar campos fuera de este spec (`width`, `fontSize`, `color` de texto,
-   etc. no existen y se ignoran).
+4. No inventar campos fuera de este spec (`width`, `fontSize` suelto, `color` de
+   texto suelto, etc. no existen y se ignoran — la tipografía va siempre dentro de
+   un objeto `Typography` completo, §4.6).
 5. No superar los límites de §6.
-6. Para columnas, anidar `Section` con `flexDirection: "row"` en el padre — y
-   avisar al usuario de la limitación de ancho de §8.1 si pide algo pixel-perfect.
+6. Para columnas de ancho parejo, usar una `Section` con `display:"grid"` y
+   `columns: N` (§2, §8.1) — es la forma recomendada hoy. El patrón viejo de
+   anidar `Section` con `flexDirection:"row"` (§7) sigue funcionando pero no
+   reparte el ancho de forma pareja; solo usarlo si el usuario acepta esa
+   limitación o pide explícitamente que las columnas floten según su contenido.
+7. `family` en cualquier `Typography` (§4.6) y `buttonStyle` en un botón (§3.1)
+   deben ser exactamente un valor ya existente en las Variables guardadas del
+   sitio (§11) — nunca inventarlos. Si no se conocen las Variables actuales,
+   dejarlos vacíos (`""`) es siempre seguro.
 
 ---
 
@@ -454,7 +647,7 @@ este documento — es una mejora al plugin, no al spec).
       "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }
     },
     "children": [
-      { "id": "cta-boton", "type": "button", "data": { "text": "Hablemos de tu proyecto", "url": "/contacto" }, "settings": { "background": { "desktop": { "type": "none" }, "tablet": null, "mobile": null }, "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "tablet": null, "mobile": null }, "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }, "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null } } }
+      { "id": "cta-boton", "type": "button", "data": { "text": "Hablemos de tu proyecto", "textTag": "", "url": "/contacto", "urlTag": "", "urlPostId": 0 }, "settings": { "background": { "desktop": { "type": "none" }, "tablet": null, "mobile": null }, "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "tablet": null, "mobile": null }, "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }, "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null } } }
     ]
   }
 ]
@@ -462,11 +655,113 @@ este documento — es una mejora al plugin, no al spec).
 
 ---
 
+## 11. Variables (tipografía global, fuentes de Google, estilos de botón)
+
+A diferencia de todo lo anterior (que es el `layout` **de una página**), las
+Variables son **de sitio entero**: se guardan una sola vez, aparte de cualquier
+`post_id`, y afectan a todas las páginas maquetadas con este plugin a la vez, sin
+tener que volver a guardar cada una desde el editor.
+
+### 11.1 Contrato de guardado
+
+```
+GET  /wp-json/mvl/v1/variables   -> { variables: Variables }
+POST /wp-json/mvl/v1/variables   body: { variables: Variables }  -> { variables, saved: true, fontErrors: string[] }
+```
+
+Requiere nonce de WP y capacidad `edit_pages` (la misma que abre el maquetador).
+`fontErrors` trae los nombres de familia que no se pudieron descargar de Google
+Fonts en ese guardado (por ejemplo, por un fallo de red del servidor) — no bloquea
+el guardado del resto de las Variables, simplemente esa familia se queda sin
+archivos locales hasta el próximo intento.
+
+```jsonc
+{
+  "containerMaxWidth": "1140px",   // SpacingSide; default "1140px"; ancho máximo de TODAS las .mvl-container del sitio
+  "fonts": {
+    "registered": ["Poppins", "Roboto"],  // hasta 6 nombres, cada uno debe existir en el catálogo curado del servidor (ver 11.1.1)
+    "typography": {
+      "h1": Typography, "h2": Typography, "h3": Typography, "h4": Typography,
+      "h5": Typography, "h6": Typography, "paragraph": Typography
+      // cada uno default vacío ({"family":"","size":"","variant":"regular","transform":"none"}) = "no tocar, usar el CSS del tema"
+    }
+  },
+  "buttonStyles": [ ButtonStyle, ... ]  // hasta 12; ver 11.3
+}
+```
+
+#### 11.1.1 Catálogo de fuentes registrables
+
+`fonts.registered` no acepta cualquier string: cada nombre debe existir en un
+catálogo curado de ~130 familias de Google Fonts embebido en el servidor
+(`google_fonts_catalog()` en `class-mvl-plugin.php`) — **no** es el catálogo
+completo de Google Fonts (que tiene miles), es una selección de las más usadas
+más un conjunto amplio adicional en orden alfabético. Cualquier nombre fuera de
+esa lista se descarta en silencio. La IA puede consultar el catálogo real vía
+`GET /wp-json/mvl/v1/variables` combinado con lo que la interfaz del maquetador
+recibe como `fontCatalog` (no expuesto hoy en un endpoint REST propio, solo en el
+JS del editor) — en la práctica, para generar Variables por API es más seguro
+preguntar al usuario qué fuentes ya tiene registradas antes de escribir un
+`family`.
+
+**Cómo se sirven realmente**: al guardar, el servidor descarga de
+`fonts.googleapis.com`/`fonts.gstatic.com` **solo** los cortes (familia + variante)
+que de verdad se usan en algún `Typography` no vacío (de un rol global o de un
+`buttonStyle`) — nunca "todas las registradas" ni "todos los pesos posibles" — los
+guarda como `.woff2` en `wp-content/uploads/mvl-fonts/` y genera un único CSS local
+con `@font-face`. El front-end de un sitio que usa este plugin **nunca** carga
+nada desde `fonts.googleapis.com` ni `fonts.gstatic.com`: ni las fuentes no
+elegidas, ni siquiera las registradas pero no usadas en ningún rol/estilo.
+
+### 11.2 Tipografía por rol (`fonts.typography`)
+
+Cada uno de los 7 roles (`h1`-`h6`, `paragraph`) es un `Typography` (§4.6) que se
+aplica, con `!important`, a:
+
+| Rol | Selector CSS |
+|---|---|
+| `h1`...`h6` | `.mvl-layout h1` ... `.mvl-layout h6` (cualquier heading de ese nivel, en cualquier página) |
+| `paragraph` | `.mvl-layout .mvl-text` (el bloque `text` completo — hereda a los `<p>`/`<strong>`/etc. de adentro por herencia normal de CSS) |
+
+Un `settings.typography` de un `Item` individual (§4.6) tiene un selector más
+específico (`[data-mvl-uid="..."] .mvl-heading`, etc.) y por lo tanto gana sobre el
+rol global correspondiente cuando ambos anulan la misma propiedad.
+
+### 11.3 Estilos de botón con nombre (`buttonStyles`)
+
+```jsonc
+{
+  "id": "primario",              // sanitize_key(); si falta o choca con otro, el servidor genera uno nuevo
+  "name": "Primario",            // sanitize_text_field(); si queda vacío, se guarda como "Estilo sin nombre"
+  "background": { "type": "none" | "color", "color": "#2271b1" },  // default {type:"color", color:"#2271b1"}
+  "textColor": "#ffffff",        // default "#ffffff"
+  "border": Border,              // §4.5; default {style:"none", width:"1px", color:"#000000", radius:"0px"}
+  "padding": Spacing,            // §4.3, NO responsive aquí; default {top:"12px", right:"24px", bottom:"12px", left:"24px"}
+  "typography": Typography       // §4.6; default vacío
+}
+```
+
+Se aplica con la clase `.mvl-btn-style-{id}` sobre el `<a class="mvl-button">`
+(§7), con `!important` en todas sus declaraciones (incluida `color`, que si no,
+perdería contra el `color:#fff!important` fijo de `.mvl-button` en el CSS del
+plugin). Un botón sin `data.buttonStyle` (`""`) o con un `id` que ya no existe en
+`buttonStyles` simplemente no lleva esa clase — usa el `.mvl-button` de siempre,
+no falla ni deja de renderizarse.
+
+---
+
 ## Pendiente / próximas secciones de este spec
 
 - [ ] Prompt de sistema listo para pegar en una IA (rol + reglas + este spec resumido)
-- [ ] Few-shots adicionales (galería de imágenes, testimonios, precios)
+- [ ] Few-shots adicionales (galería de imágenes, testimonios, precios, ejemplo con
+      `display:"grid"` y con Variables/`buttonStyle`)
 - [ ] Definir un mini-lenguaje o wrapper de "recetas" (ítems de negocio → JSON) si se
       decide construir eso
-- [ ] Decidir si vale la pena agregar `width`/`flex-basis` por hijo al plugin para
-      que la IA pueda hacer columnas reales
+- [x] ~~Agregar `width`/`flex-basis` por hijo para columnas reales~~ — resuelto con
+      `Section.settings.display:"grid"` + `columns` (§2, §8.1, §11)
+- [ ] Endpoint REST propio para el catálogo de Google Fonts (`fontCatalog`, hoy solo
+      viaja embebido en `window.MVL` del editor, no hay forma de consultarlo desde
+      fuera de wp-admin) — ver §11.1.1
+- [ ] `line-height`, `letter-spacing` y color de texto en `Typography` (§4.6)
+- [ ] Hacer `Typography`/`display`/`columns` responsive (hoy `columns` es el único
+      `ResponsiveValue` de los nuevos campos, ver §8.9)
