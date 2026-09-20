@@ -354,7 +354,7 @@ final class MVL_Plugin {
 			$typography[ $role ] = self::sanitize_typography( $typography_raw[ $role ] ?? null, $registered );
 		}
 		return array(
-			'containerMaxWidth' => self::sanitize_spacing_side( $raw['containerMaxWidth'] ?? null, '1140px' ),
+			'containerMaxWidth' => self::sanitize_spacing_side( $raw['containerMaxWidth'] ?? null, '1140px', 6000 ),
 			'fonts'             => array(
 				'registered' => $registered,
 				'typography' => $typography,
@@ -523,6 +523,7 @@ final class MVL_Plugin {
 				'htmlId'         => self::sanitize_html_id( $settings['htmlId'] ?? '' ),
 				'display'        => in_array( $settings['display'] ?? '', array( 'flex', 'grid' ), true ) ? $settings['display'] : 'flex',
 				'columns'        => self::sanitize_responsive( $settings['columns'] ?? null, static function ( $v ) { return max( 1, min( 12, (int) $v ) ); }, 3 ),
+				'width'          => self::sanitize_grid_width( $settings['width'] ?? '' ),
 				'textAlign'      => self::sanitize_responsive( $settings['textAlign'] ?? null, array( self::class, 'sanitize_text_align' ), 'left' ),
 				'gap'            => self::sanitize_responsive( $settings['gap'] ?? null, static function ( $v ) { return self::sanitize_spacing_side( $v, '16px' ); }, '16px' ),
 				'flexDirection'  => self::sanitize_responsive( $settings['flexDirection'] ?? null, array( self::class, 'sanitize_flex_direction' ), 'column' ),
@@ -551,6 +552,7 @@ final class MVL_Plugin {
 				'classes'    => self::sanitize_css_classes( $settings['classes'] ?? '' ),
 				'htmlId'     => self::sanitize_html_id( $settings['htmlId'] ?? '' ),
 				'typography' => self::sanitize_typography( $settings['typography'] ?? null, $variables['fonts']['registered'] ),
+				'width'      => self::sanitize_grid_width( $settings['width'] ?? '' ),
 			),
 		);
 		if ( 'heading' === $type ) { $clean['data'] = array( 'text' => sanitize_text_field( $data['text'] ?? '' ), 'level' => in_array( (int) ( $data['level'] ?? 2 ), array( 1, 2, 3, 4, 5, 6 ), true ) ? (int) $data['level'] : 2 ); }
@@ -604,21 +606,62 @@ final class MVL_Plugin {
 	/**
 	 * Un lado de padding/margin admite cualquier unidad CSS (px, %, em, rem, vh, vw),
 	 * no solo píxeles; los valores numéricos planos (formato antiguo) se asumen en px.
+	 * $max_abs sube el rango para casos que no son padding/margin/border (p. ej.
+	 * containerMaxWidth, que con el límite de ±1000 por defecto recortaba en
+	 * silencio su propio valor por defecto de "1140px" a "1000px").
 	 */
-	private static function sanitize_spacing_side( $value, string $default ): string {
+	private static function sanitize_spacing_side( $value, string $default, float $max_abs = 1000 ): string {
 		if ( is_numeric( $value ) ) {
-			return self::format_spacing_number( (float) $value ) . 'px';
+			return self::format_spacing_number( (float) $value, $max_abs ) . 'px';
 		}
 		if ( is_string( $value ) && preg_match( '/^(-?\d+(?:\.\d+)?)(px|%|em|rem|vh|vw)$/', trim( $value ), $matches ) ) {
-			return self::format_spacing_number( (float) $matches[1] ) . $matches[2];
+			return self::format_spacing_number( (float) $matches[1], $max_abs ) . $matches[2];
 		}
 		return $default;
 	}
 
-	private static function format_spacing_number( float $num ): string {
-		$num = max( -1000, min( 1000, $num ) );
+	private static function format_spacing_number( float $num, float $max_abs = 1000 ): string {
+		$num = max( -$max_abs, min( $max_abs, $num ) );
 		$str = rtrim( rtrim( number_format( $num, 3, '.', '' ), '0' ), '.' );
 		return '' !== $str ? $str : '0';
+	}
+
+	/**
+	 * Ancho de una columna dentro de un Contenedor en modo grid (ver
+	 * grid_template_columns_css()): además de las unidades CSS normales acepta
+	 * "fr" (fracción del espacio disponible, la unidad nativa de CSS Grid).
+	 * "" (vacío) es el default y significa "reparto igual" (equivale a "1fr"),
+	 * no un valor propio — así todas las columnas empiezan iguales y cada una se
+	 * vuelve independiente solo cuando se le pone un ancho.
+	 */
+	private static function sanitize_grid_width( $value ): string {
+		if ( is_numeric( $value ) ) {
+			$value = $value . 'px';
+		}
+		if ( is_string( $value ) && preg_match( '/^(\d+(?:\.\d+)?)(px|%|em|rem|vh|vw|fr)$/', trim( $value ), $matches ) ) {
+			$num = max( 0.01, min( 1000, (float) $matches[1] ) );
+			$str = rtrim( rtrim( number_format( $num, 3, '.', '' ), '0' ), '.' );
+			return ( '' !== $str ? $str : '0' ) . $matches[2];
+		}
+		return '';
+	}
+
+	/**
+	 * Genera la lista de tamaños de columna para grid-template-columns: una por
+	 * cada una de las $columns pistas, tomando el "width" del hijo en esa
+	 * posición si lo tiene, o "1fr" (reparto igual) si no. Si hay más hijos que
+	 * columnas, las filas siguientes reusan el mismo patrón (comportamiento
+	 * normal de CSS Grid); si hay menos, las pistas sobrantes quedan en 1fr sin
+	 * contenido que las ocupe.
+	 */
+	private static function grid_template_columns_css( array $children, int $columns ): string {
+		$tracks = array();
+		for ( $i = 0; $i < $columns; $i++ ) {
+			$child   = $children[ $i ] ?? null;
+			$width   = ( $child && '' !== ( $child['settings']['width'] ?? '' ) ) ? $child['settings']['width'] : '1fr';
+			$tracks[] = esc_attr( $width );
+		}
+		return implode( ' ', $tracks );
 	}
 
 	private static function sanitize_spacing( $value, array $default ): array {
@@ -867,7 +910,7 @@ final class MVL_Plugin {
 			if ( 'section' === $node['type'] ) {
 				$settings   = $node['settings'];
 				$is_grid    = 'grid' === $settings['display'];
-				$grid_decl  = $is_grid ? 'display:grid;grid-template-columns:repeat(' . (int) $settings['columns']['desktop'] . ',1fr);' : 'display:flex;flex-wrap:wrap;flex-direction:' . esc_attr( $settings['flexDirection']['desktop'] ) . ';justify-content:' . esc_attr( $settings['justifyContent']['desktop'] ) . ';align-items:' . esc_attr( $settings['alignItems']['desktop'] ) . ';';
+				$grid_decl  = $is_grid ? 'display:grid;grid-template-columns:' . self::grid_template_columns_css( $node['children'], (int) $settings['columns']['desktop'] ) . ';' : 'display:flex;flex-wrap:wrap;flex-direction:' . esc_attr( $settings['flexDirection']['desktop'] ) . ';justify-content:' . esc_attr( $settings['justifyContent']['desktop'] ) . ';align-items:' . esc_attr( $settings['alignItems']['desktop'] ) . ';';
 				$rules['base'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['desktop'] ) . ';gap:' . esc_attr( $settings['gap']['desktop'] ) . ';' . $grid_decl . '}';
 				if ( null !== $settings['textAlign']['tablet'] ) {
 					$rules['tablet'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['tablet'] ) . '}';
@@ -883,10 +926,10 @@ final class MVL_Plugin {
 				}
 				if ( $is_grid ) {
 					if ( null !== $settings['columns']['tablet'] ) {
-						$rules['tablet'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{grid-template-columns:repeat(' . (int) $settings['columns']['tablet'] . ',1fr)}';
+						$rules['tablet'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{grid-template-columns:' . self::grid_template_columns_css( $node['children'], (int) $settings['columns']['tablet'] ) . '}';
 					}
 					if ( null !== $settings['columns']['mobile'] ) {
-						$rules['mobile'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{grid-template-columns:repeat(' . (int) $settings['columns']['mobile'] . ',1fr)}';
+						$rules['mobile'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{grid-template-columns:' . self::grid_template_columns_css( $node['children'], (int) $settings['columns']['mobile'] ) . '}';
 					}
 				} else {
 					if ( null !== $settings['flexDirection']['tablet'] ) {
@@ -1071,40 +1114,37 @@ final class MVL_Plugin {
 	}
 
 	/**
-	 * Descarga a wp-content/uploads/mvl-fonts SOLO los cortes (familia+variante)
-	 * realmente usados en algún rol tipográfico o estilo de botón — nunca "todas
-	 * las registradas" ni "todos los pesos posibles" — y regenera el CSS combinado
-	 * con @font-face apuntando a esos archivos locales. Así el front nunca pide
-	 * nada a fonts.googleapis.com/fonts.gstatic.com: las fuentes elegidas pero no
-	 * usadas en ningún rol, y cualquier fuente no registrada, no se descargan ni se
-	 * referencian en ningún sitio. Se ejecuta en el propio request de guardado de
-	 * Variables (síncrono), así que guardar puede tardar unos segundos si cambiaron
-	 * las fuentes; no hace ninguna llamada de red si no cambió nada relevante.
+	 * Descarga a wp-content/uploads/mvl-fonts las 4 variantes estándar
+	 * (regular/italic/bold/bolditalic) de CADA familia registrada, y regenera el
+	 * CSS combinado con @font-face apuntando a esos archivos locales. Así el
+	 * front nunca pide nada a fonts.googleapis.com/fonts.gstatic.com: una fuente
+	 * que no esté registrada no se descarga ni se referencia en ningún sitio.
+	 *
+	 * No se puede limitar la descarga a "solo los cortes usados en Variables"
+	 * (como en una versión anterior de este método): una fuente registrada
+	 * también se puede elegir en el override de tipografía de un bloque
+	 * individual de CUALQUIER página del sitio (§4.6 del spec), y Variables se
+	 * guarda aparte, sin visibilidad del `layout` de cada post — así que en el
+	 * momento de este guardado no hay forma de saber qué variante va a usar cada
+	 * página. Se ejecuta en el propio request de guardado de Variables
+	 * (síncrono), así que registrar una fuente nueva puede tardar unos segundos;
+	 * no hace ninguna llamada de red para una familia que ya tenía sus 4
+	 * variantes descargadas.
 	 *
 	 * @return string[] Nombres de familia que no se pudieron descargar (vacío si ninguna falló).
 	 */
 	private static function sync_local_fonts( array $variables ): array {
-		$needed = array();
-		foreach ( $variables['fonts']['typography'] as $typo ) {
-			if ( '' !== $typo['family'] ) {
-				$needed[ $typo['family'] ][ $typo['variant'] ] = true;
-			}
-		}
-		foreach ( $variables['buttonStyles'] as $style ) {
-			if ( '' !== $style['typography']['family'] ) {
-				$needed[ $style['typography']['family'] ][ $style['typography']['variant'] ] = true;
-			}
-		}
-		if ( empty( $needed ) ) {
+		$registered = $variables['fonts']['registered'];
+		if ( empty( $registered ) ) {
 			self::delete_local_fonts();
 			return array();
 		}
 		wp_mkdir_p( self::fonts_base_dir() );
 		$css    = '';
 		$errors = array();
-		foreach ( $needed as $family => $variants ) {
+		foreach ( $registered as $family ) {
 			$axis_pairs = array();
-			foreach ( array_keys( $variants ) as $variant ) {
+			foreach ( self::FONT_VARIANTS as $variant ) {
 				list( $ital, $wght ) = self::variant_axis( $variant );
 				$axis_pairs[ $ital . ',' . $wght ] = true;
 			}

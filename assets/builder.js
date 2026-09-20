@@ -170,7 +170,8 @@
       margin: respDefault(defaultSpacing()),
       classes: '',
       htmlId: '',
-      typography: defaultTypography()
+      typography: defaultTypography(),
+      width: ''
     };
   }
   function newSectionSettings() {
@@ -447,6 +448,11 @@
     var html = '';
     if (item.type === 'heading' || item.type === 'text' || item.type === 'button') {
       html += typographyFieldsHtml('item', item.settings.typography, { label: 'Tipografía', inheritLabel: 'Heredar de Variables' });
+    }
+    var loc = findLocation(item.id);
+    var parent = loc && loc.parentSection;
+    if (parent && parent.settings.display === 'grid') {
+      html += '<label>Ancho de esta columna <span class="mvl-hint">(px, %, em, rem, fr — vacío = reparto igual entre todas)</span><input data-setting="width" type="text" placeholder="1fr" value="' + escAttr(item.settings.width || '') + '"></label>';
     }
     html += '<div class="mvl-device-note">Editando para: <strong>' + deviceLabels[device] + '</strong></div>';
     if (item.type === 'section') {
@@ -1049,6 +1055,15 @@
     if (typo.transform && typo.transform !== 'none') decl += 'text-transform:' + typo.transform + '!important;';
     return decl ? selector + '{' + decl + '}' : '';
   }
+  /** Equivalente en JS de grid_template_columns_css() en class-mvl-plugin.php. */
+  function gridTemplateColumnsCss(children, columns) {
+    var tracks = [];
+    for (var i = 0; i < columns; i++) {
+      var child = children[i];
+      tracks.push(child && child.settings.width ? child.settings.width : '1fr');
+    }
+    return tracks.join(' ');
+  }
   function itemTypographySelector(uid, type) {
     if (type === 'heading') return '[data-mvl-uid="' + uid + '"] .mvl-heading';
     if (type === 'text') return '[data-mvl-uid="' + uid + '"] .mvl-text';
@@ -1101,7 +1116,7 @@
         var s = node.settings;
         var isGrid = s.display === 'grid';
         var gridDecl = isGrid
-          ? 'display:grid;grid-template-columns:repeat(' + respGet(s.columns, 'desktop') + ',1fr);'
+          ? 'display:grid;grid-template-columns:' + gridTemplateColumnsCss(node.children, respGet(s.columns, 'desktop')) + ';'
           : 'display:flex;flex-wrap:wrap;flex-direction:' + s.flexDirection.desktop + ';justify-content:' + s.justifyContent.desktop + ';align-items:' + s.alignItems.desktop + ';';
         acc.base += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + s.textAlign.desktop + ';gap:' + cssLength(s.gap.desktop) + ';' + gridDecl + '}';
         if (s.textAlign.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + s.textAlign.tablet + '}';
@@ -1109,8 +1124,8 @@
         if (s.gap.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{gap:' + cssLength(s.gap.tablet) + '}';
         if (s.gap.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{gap:' + cssLength(s.gap.mobile) + '}';
         if (isGrid) {
-          if (s.columns.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{grid-template-columns:repeat(' + s.columns.tablet + ',1fr)}';
-          if (s.columns.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{grid-template-columns:repeat(' + s.columns.mobile + ',1fr)}';
+          if (s.columns.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{grid-template-columns:' + gridTemplateColumnsCss(node.children, s.columns.tablet) + '}';
+          if (s.columns.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{grid-template-columns:' + gridTemplateColumnsCss(node.children, s.columns.mobile) + '}';
         } else {
           if (s.flexDirection.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{flex-direction:' + s.flexDirection.tablet + '}';
           if (s.flexDirection.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{flex-direction:' + s.flexDirection.mobile + '}';

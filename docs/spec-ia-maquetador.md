@@ -68,6 +68,7 @@ solo genera el array `layout`, el propio plugin se encarga de renderizarlo.
     "htmlId":         string,    // NO es responsive; default ""; ver §4.6
     "display":        "flex" | "grid",  // NO es responsive; default "flex"; ver nota de grid abajo
     "columns":        ResponsiveValue<int 1-12>,  // default 3; solo tiene efecto si display:"grid"
+    "width":          GridWidth,  // NO es responsive; default ""; SOLO tiene efecto en un hijo directo de una Section en modo "grid" — ver nota de grid abajo
     "textAlign":      ResponsiveValue<"left"|"center"|"right">,  // default "left"
     "gap":            ResponsiveValue<SpacingSide>,   // default "16px"
     "flexDirection":  ResponsiveValue<"row"|"column">, // default "column"; solo tiene efecto si display:"flex"
@@ -88,9 +89,23 @@ Notas clave:
   (hijo directo de la section): `"flex"` (default, el de siempre) o `"grid"`. Con
   `"grid"`, `flexDirection`/`justifyContent`/`alignItems` no tienen efecto (se
   siguen guardando pero se ignoran en el CSS) y en su lugar se usa `columns` para
-  fijar `grid-template-columns: repeat(N, 1fr)` — esto sí reparte el ancho de forma
-  pareja entre los hijos directos de esa section, a diferencia del flex (ver la
+  definir cuántas pistas tiene `grid-template-columns` — esto sí reparte el ancho
+  entre los hijos directos de esa section, a diferencia del flex (ver la
   limitación de §8.1, que con `display:"grid"` deja de aplicar).
+- **Ancho de columna por hijo (`GridWidth`, campo `width`)**: cuando el padre está
+  en modo `"grid"`, cada hijo directo (`Section` o `Item`, en la posición que
+  ocupa) puede fijar su propio ancho de columna con `settings.width` — un string
+  con número + unidad `px`, `%`, `em`, `rem`, `vh`, `vw` **o `fr`** (la unidad
+  nativa de CSS Grid, "fracción del espacio restante"). `""` (default) significa
+  "reparto igual" y equivale a `"1fr"` — por eso **no hace falta poner nada para
+  la opción de columnas iguales**, es lo que ya pasa por defecto; solo hay que
+  llenar `width` en los hijos donde se quiera un ancho distinto. El servidor arma
+  `grid-template-columns` tomando, para cada una de las `columns` pistas, el
+  `width` del hijo en esa posición (o `"1fr"` si está vacío o no hay hijo ahí):
+  por ejemplo, con `columns: 3` y los hijos con `width` `"250px"`, `""`, `"2fr"`
+  el resultado es `grid-template-columns: 250px 1fr 2fr`. `width` en cualquier
+  otro contexto (hijo de una section en modo `"flex"`, o de la raíz) se guarda
+  pero no tiene ningún efecto visual.
 - `flexDirection` / `justifyContent` / `alignItems` / `gap` controlan el
   `display:flex` del wrapper cuando `display` es `"flex"` (`max-width` viene de
   Variables — ver §11 —, `margin:0 auto; flex-wrap:wrap` fijos), **no** el
@@ -124,7 +139,8 @@ como hijos de una `section` (no en la raíz).
     "margin":     ResponsiveValue<Spacing>,     // default: 0 en los 4 lados
     "classes":    string,          // NO es responsive; default ""; ver §4.6
     "htmlId":     string,          // NO es responsive; default ""; ver §4.6
-    "typography": Typography       // NO es responsive; default vacío ("sin anular"); ver §4.6 y §11
+    "typography": Typography,      // NO es responsive; default vacío ("sin anular"); ver §4.6 y §11
+    "width":      GridWidth        // NO es responsive; default ""; solo tiene efecto si el `Item` es hijo directo de una `Section` en modo "grid" — ver §2
   }
 }
 ```
@@ -272,7 +288,10 @@ String con número + unidad CSS: `px`, `%`, `em`, `rem`, `vh`, `vw`.
 "16px"   "1.5rem"   "50%"   "-8px"
 ```
 
-- Rango numérico permitido: **-1000 a 1000** (se recorta si se pasa).
+- Rango numérico permitido: **-1000 a 1000** (se recorta si se pasa), **excepto
+  `containerMaxWidth` de Variables (§11), que admite -6000 a 6000** — tiene un
+  rango propio más amplio porque como ancho de contenedor típicamente supera los
+  1000px (de hecho su propio default, `"1140px"`, superaba el límite general).
 - Un número plano (`16` en vez de `"16px"`) se acepta y se asume `px`.
 - Cualquier string que no matchee el patrón `^-?\d+(\.\d+)?(px|%|em|rem|vh|vw)$` cae
   al valor por defecto de ese campo (se pierde silenciosamente).
@@ -412,6 +431,7 @@ fondo con esquinas redondeadas).
 | Paradas de degradado | 2–6 |
 | Valores numéricos de spacing | -1000 a 1000 |
 | Columnas de un `Section` en modo `grid` | 1–12 |
+| Valor numérico de `GridWidth` (`settings.width`) | 0.01–1000 |
 | Fuentes de Google registradas en Variables | 6 (§11.1) |
 | Estilos de botón con nombre en Variables | 12 (§11.3) |
 | Tokens de `classes` por `Section`/`Item` | 20 (§4.6) |
@@ -468,15 +488,16 @@ Estas cosas **no existen** en el modelo de datos hoy, así que la IA no debe
 asumirlas ni inventar campos para ellas — cualquier campo que no esté en este
 documento simplemente se ignora al sanitizar:
 
-1. **No hay control de ancho por bloque/columna** (`width`, `flex-basis`,
-   `flex-grow`, `%` de columna) **en modo `flex`**. Un layout de "3 columnas
-   iguales" con `flexDirection: row` no reparte el espacio automáticamente: cada
-   hija ocupa el ancho de su contenido y el `flex-wrap:wrap` hace que si no entran
-   en una fila, bajen a la siguiente. **Desde que existe `display:"grid"` (§2) esto
-   ya tiene solución real**: una `Section` padre con `display:"grid"` y
-   `columns: N` reparte el ancho de forma pareja entre sus hijas directas — es la
-   forma recomendada de hacer columnas de ancho igual hoy, en vez del patrón viejo
-   de §7 con `flexDirection:"row"`.
+1. ~~No hay control de ancho por bloque/columna~~ **Ya existe, pero solo en modo
+   `grid` (§2)**: una `Section` padre con `display:"grid"` reparte a sus hijas
+   directas en `columns` pistas, todas iguales (`1fr`) por defecto, y cada hija
+   puede fijar su propio `settings.width` (`GridWidth`, §2) para un ancho fijo o
+   una fracción distinta — esto reemplaza al patrón viejo de §7 con
+   `flexDirection:"row"`, que sigue existiendo pero no reparte el ancho. **En modo
+   `flex` la limitación de ancho por bloque/columna sigue existiendo tal cual**
+   (`width`/`flex-basis`/`flex-grow`/`%` no tienen ningún efecto ahí): cada hija
+   ocupa el ancho de su contenido y `flex-wrap:wrap` hace que si no entran en una
+   fila, bajen a la siguiente.
 2. **No hay `width`/`height`/`min-height` en ningún nivel**, ni siquiera en modo
    `grid` (no hay `grid-template-rows`, `min-height` de fila, etc.), más allá del
    número de columnas.
@@ -511,15 +532,17 @@ documento simplemente se ignora al sanitizar:
    independientes (la del `Item` envolvente y la del `buttonStyle` del link).
 7. `justifyContent`/`alignItems`/`flexDirection`/`gap`/`textAlign`/`display`/
    `columns` solo se pueden fijar en `Section`, nunca en un `Item` individual.
+   `width` (`GridWidth`) sí existe en ambos, `Section` e `Item` (§2, §3), porque
+   cualquiera de los dos puede ser la hija directa de una `Section` en grid.
 8. **El contenido dinámico (§3.2) solo existe en el botón** (`textTag`/`urlTag`), y
    ni siquiera ahí es "en vivo": se resuelve al guardar, no en cada visita (ver la
    advertencia en §3.2). No hay dynamic tags para `heading`, `text`, `image` ni
    para ningún `settings` (por ejemplo, no se puede poner "el color destacado del
    post" como fondo).
-9. **`classes`/`htmlId`/`typography`/`display`/`columns`/Variables no son
-   responsive** (§4.1): no hay forma de, por ejemplo, cambiar el tamaño de fuente
-   solo en mobile, más allá de las 12 columnas de grid que sí son
-   `ResponsiveValue<int>`.
+9. **`classes`/`htmlId`/`typography`/`display`/`columns`/`width`/Variables no son
+   responsive** (§4.1) — **excepto `columns`**, que sí es `ResponsiveValue<int>`.
+   No hay forma de, por ejemplo, darle a una columna un ancho distinto en mobile
+   que en escritorio: su `width` es el mismo en todos los tamaños de pantalla.
 
 ---
 
@@ -705,13 +728,20 @@ preguntar al usuario qué fuentes ya tiene registradas antes de escribir un
 `family`.
 
 **Cómo se sirven realmente**: al guardar, el servidor descarga de
-`fonts.googleapis.com`/`fonts.gstatic.com` **solo** los cortes (familia + variante)
-que de verdad se usan en algún `Typography` no vacío (de un rol global o de un
-`buttonStyle`) — nunca "todas las registradas" ni "todos los pesos posibles" — los
-guarda como `.woff2` en `wp-content/uploads/mvl-fonts/` y genera un único CSS local
-con `@font-face`. El front-end de un sitio que usa este plugin **nunca** carga
-nada desde `fonts.googleapis.com` ni `fonts.gstatic.com`: ni las fuentes no
-elegidas, ni siquiera las registradas pero no usadas en ningún rol/estilo.
+`fonts.googleapis.com`/`fonts.gstatic.com` las 4 variantes estándar (`regular`,
+`italic`, `bold`, `bolditalic`) de **cada familia en `fonts.registered`** — no
+solo las que ya se usan en un rol global o un `buttonStyle` — porque una familia
+registrada también se puede elegir como override en el `Typography` de un bloque
+individual de **cualquier página** del sitio (§4.6), y este guardado de Variables
+no tiene visibilidad del `layout` de cada post para saber de antemano cuál se va
+a usar. Los guarda como `.woff2` en `wp-content/uploads/mvl-fonts/` y genera un
+único CSS local con `@font-face`. El front-end de un sitio que usa este plugin
+**nunca** carga nada desde `fonts.googleapis.com` ni `fonts.gstatic.com`: solo
+las familias que están en `fonts.registered` en este momento tienen archivos
+locales; quitar una familia de `fonts.registered` borra sus archivos en el
+próximo guardado de Variables (aunque algún bloque de alguna página todavía la
+referencie — ese bloque se queda mostrando la fuente del tema hasta que se le
+cambie el `family`, ver §4.6).
 
 ### 11.2 Tipografía por rol (`fonts.typography`)
 
@@ -758,7 +788,8 @@ no falla ni deja de renderizarse.
 - [ ] Definir un mini-lenguaje o wrapper de "recetas" (ítems de negocio → JSON) si se
       decide construir eso
 - [x] ~~Agregar `width`/`flex-basis` por hijo para columnas reales~~ — resuelto con
-      `Section.settings.display:"grid"` + `columns` (§2, §8.1, §11)
+      `Section.settings.display:"grid"` + `columns` + `width` (`GridWidth`) por
+      hijo para anchos variables (§2, §8.1)
 - [ ] Endpoint REST propio para el catálogo de Google Fonts (`fontCatalog`, hoy solo
       viaja embebido en `window.MVL` del editor, no hay forma de consultarlo desde
       fuera de wp-admin) — ver §11.1.1
