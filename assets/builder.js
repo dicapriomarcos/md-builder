@@ -502,7 +502,7 @@
       + '<button class="mvl-device" data-device="mobile" title="Móvil">📲</button>'
       + '</div>'
       + '<button class="mvl-toggle-structure" data-action="toggle-structure" title="Estructura">Estructura</button>'
-      + '<button class="mvl-toggle-fullscreen" data-action="toggle-fullscreen" title="Pantalla completa">⛶ Pantalla completa</button>'
+      + '<button class="mvl-toggle-fullscreen" data-action="toggle-fullscreen" title="Ver a ancho completo">⛶ Ancho completo</button>'
       + '<span class="mvl-status"></span>'
       + '<button class="button button-primary" data-action="save">Guardar</button>'
       + '</header>'
@@ -539,22 +539,10 @@
       };
     });
     refs.devices.forEach(function (b) { b.onclick = function () { state.device = b.dataset.device; update(); }; });
-
-    if (document.addEventListener) {
-      document.addEventListener('fullscreenchange', function () {
-        state.fullscreen = !!document.fullscreenElement;
-        update();
-      });
-    }
   }
 
   function toggleFullscreen() {
     state.fullscreen = !state.fullscreen;
-    if (state.fullscreen) {
-      if (root.requestFullscreen) root.requestFullscreen().catch(function () {});
-    } else if (document.fullscreenElement) {
-      document.exitFullscreen().catch(function () {});
-    }
     update();
   }
 
