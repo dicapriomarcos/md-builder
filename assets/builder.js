@@ -258,7 +258,7 @@
         var item = selectedItem();
         if (!item) return;
         var target = respEnsureOverride(item.settings.background, state.device || 'desktop');
-        target.type = b.dataset.bgType;
+        target.type = target.type === b.dataset.bgType ? 'none' : b.dataset.bgType;
         markDirty();
       };
     });
