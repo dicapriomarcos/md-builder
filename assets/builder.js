@@ -24,6 +24,16 @@
   function selectedItem() { for (var s of state.layout) { if (s.id === state.selected) return s; for (var i of s.children) if (i.id === state.selected) return i; } return null; }
   function currentSection() { for (var s of state.layout) { if (s.id === state.selected || s.children.some(function (i) { return i.id === state.selected; })) return s; } return state.layout[0]; }
   function markDirty() { state.dirty = true; update(); }
+  /**
+   * Para inputs de texto/número en los que el usuario sigue tecleando: actualiza el
+   * estado y la vista previa sin redibujar el panel de ajustes (eso destruiría el
+   * input y le haría perder el foco a mitad de la escritura).
+   */
+  function markDirtyLite() {
+    state.dirty = true;
+    refs.status.textContent = 'Cambios sin guardar';
+    refreshPreview();
+  }
 
   function respDefault(value) { return { desktop: value, tablet: null, mobile: null }; }
   function respGet(resp, device) {
@@ -48,11 +58,11 @@
       video: { url: '' }
     };
   }
-  function defaultSpacing() { return { top: 0, right: 0, bottom: 0, left: 0 }; }
+  function defaultSpacing() { return { top: '0px', right: '0px', bottom: '0px', left: '0px', linked: false }; }
   function defaultSettings(kind) {
     return {
       background: respDefault(defaultBackground(kind === 'section' ? 'color' : 'none')),
-      padding: respDefault(kind === 'section' ? { top: 48, right: 24, bottom: 48, left: 24 } : defaultSpacing()),
+      padding: respDefault(kind === 'section' ? { top: '48px', right: '24px', bottom: '48px', left: '24px', linked: false } : defaultSpacing()),
       margin: respDefault(defaultSpacing())
     };
   }
@@ -168,11 +178,12 @@
     return html;
   }
 
-  function spacingGrid(label, key, resp, device, min, max) {
+  function spacingGrid(label, key, resp, device) {
     var val = respGet(resp, device);
-    var html = '<label>' + label + ' (px)' + resetButton(key, resp, device) + '</label>';
+    var html = '<div class="mvl-spacing-head"><label>' + label + ' <span class="mvl-hint">(px, %, em, rem, vh, vw)</span>' + resetButton(key, resp, device) + '</label>';
+    html += '<button type="button" class="mvl-link-toggle' + (val.linked ? ' is-linked' : '') + '" data-link-toggle="' + key + '" title="' + (val.linked ? 'Desvincular valores' : 'Vincular valores') + '"><span class="dashicons ' + (val.linked ? 'dashicons-admin-links' : 'dashicons-editor-unlink') + '"></span></button></div>';
     html += '<div class="mvl-padding-grid">' + ['top', 'right', 'bottom', 'left'].map(function (side) {
-      return '<label class="mvl-padding-side">' + sideLabels[side] + '<input data-resp="' + key + '" data-resp-side="' + side + '" type="number" min="' + min + '" max="' + max + '" value="' + val[side] + '"></label>';
+      return '<label class="mvl-padding-side">' + sideLabels[side] + '<input data-resp="' + key + '" data-resp-side="' + side + '" type="text" placeholder="0px" value="' + escAttr(val[side]) + '"></label>';
     }).join('') + '</div>';
     return html;
   }
@@ -180,8 +191,8 @@
   function advancedPanel(item) {
     var device = state.device || 'desktop';
     return '<div class="mvl-device-note">Editando para: <strong>' + deviceLabels[device] + '</strong></div>'
-      + spacingGrid('Relleno', 'padding', item.settings.padding, device, 0, 200)
-      + spacingGrid('Margen', 'margin', item.settings.margin, device, -200, 200);
+      + spacingGrid('Relleno', 'padding', item.settings.padding, device)
+      + spacingGrid('Margen', 'margin', item.settings.margin, device);
   }
 
   function inspector(item) {
@@ -218,7 +229,7 @@
         if (el.dataset.field === 'size' && item.data.id && attachmentSizesCache[item.data.id] && attachmentSizesCache[item.data.id][value]) {
           item.data.url = attachmentSizesCache[item.data.id][value];
         }
-        markDirty();
+        markDirtyLite();
       });
     });
 
@@ -228,7 +239,7 @@
         if (!item) return;
         var device = state.device || 'desktop';
         item.settings[el.dataset.resp][device] = el.value;
-        markDirty();
+        markDirtyLite();
       });
     });
 
@@ -239,9 +250,30 @@
         var device = state.device || 'desktop';
         var resp = item.settings[el.dataset.resp];
         var target = respEnsureOverride(resp, device);
-        target[el.dataset.respSide] = Number(el.value) || 0;
-        markDirty();
+        if (target.linked) {
+          target.top = target.right = target.bottom = target.left = el.value;
+          container.querySelectorAll('[data-resp="' + el.dataset.resp + '"][data-resp-side]').forEach(function (sibling) {
+            if (sibling !== el) sibling.value = el.value;
+          });
+        } else {
+          target[el.dataset.respSide] = el.value;
+        }
+        markDirtyLite();
       });
+    });
+
+    container.querySelectorAll('[data-link-toggle]').forEach(function (b) {
+      b.onclick = function () {
+        var item = selectedItem();
+        if (!item) return;
+        var device = state.device || 'desktop';
+        var target = respEnsureOverride(item.settings[b.dataset.linkToggle], device);
+        target.linked = !target.linked;
+        if (target.linked) {
+          target.right = target.bottom = target.left = target.top;
+        }
+        markDirty();
+      };
     });
 
     container.querySelectorAll('[data-reset]').forEach(function (btn) {
@@ -272,7 +304,7 @@
         var obj = target;
         for (var i = 0; i < path.length - 1; i++) obj = obj[path[i]];
         obj[path[path.length - 1]] = el.type === 'number' ? Number(el.value) : el.value;
-        markDirty();
+        markDirtyLite();
       });
     });
 
@@ -284,7 +316,7 @@
         var stop = target.gradient.stops[Number(el.dataset.gradientStop)];
         if (!stop) return;
         stop[el.dataset.gradientField] = el.dataset.gradientField === 'pos' ? Number(el.value) : el.value;
-        markDirty();
+        markDirtyLite();
       });
     });
 
@@ -443,7 +475,8 @@
     return (text || '').split(/\n{2,}/).map(function (p) { return p.trim(); }).filter(Boolean).map(function (p) { return '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>'; }).join('');
   }
 
-  function paddingCss(p) { return (p.top | 0) + 'px ' + (p.right | 0) + 'px ' + (p.bottom | 0) + 'px ' + (p.left | 0) + 'px'; }
+  function cssLength(v) { v = (v == null ? '' : v).toString().trim(); if (v === '') return '0px'; return /^-?\d+(\.\d+)?$/.test(v) ? v + 'px' : v; }
+  function paddingCss(p) { return cssLength(p.top) + ' ' + cssLength(p.right) + ' ' + cssLength(p.bottom) + ' ' + cssLength(p.left); }
 
   function backgroundCss(bg) {
     if (bg.type === 'color') return 'background:' + bg.color + ';';
@@ -522,8 +555,12 @@
 
   function updateResponsiveStyle(doc) {
     var style = doc.getElementById('mvl-responsive-style');
-    if (!style) { style = doc.createElement('style'); style.id = 'mvl-responsive-style'; doc.head.appendChild(style); }
+    if (!style) { style = doc.createElement('style'); style.id = 'mvl-responsive-style'; }
     style.textContent = buildResponsiveCss(state.layout);
+    // La página real ya trae su propio <style> con los valores guardados; como tiene
+    // igual especificidad, para que la vista previa en vivo siempre gane hay que
+    // mantener este <style> al final del body (appendChild también lo reubica si ya existía).
+    doc.body.appendChild(style);
   }
 
   function refreshPreview() {

@@ -64,4 +64,9 @@ body.mvl-fullscreen .mvl-admin-wrap{position:fixed;inset:0;margin:0;z-index:1000
 .mvl-gradient-stops{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 .mvl-gradient-stop{display:flex;align-items:center;gap:6px}
 .mvl-gradient-stop input[type="number"]{width:60px}
+.mvl-hint{font-weight:400;font-size:11px;color:#8c8f94;text-transform:none}
+.mvl-spacing-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.mvl-link-toggle{flex:none;background:#f6f7f7;border:1px solid #dcdcde;border-radius:3px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#50575e}
+.mvl-link-toggle .dashicons{font-size:15px;width:15px;height:15px}
+.mvl-link-toggle.is-linked{background:#e7f1ff;border-color:#2271b1;color:#135e96}
 

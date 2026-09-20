@@ -161,10 +161,10 @@ final class MVL_Plugin {
 				'id'       => sanitize_key( $section['id'] ?? wp_generate_uuid4() ),
 				'type'     => 'section',
 				'settings' => array(
-					'background' => self::sanitize_responsive( $settings['background'] ?? null, array( self::class, 'sanitize_background_value' ), array( 'type' => 'color', 'color' => '#ffffff' ) ),
+	'background' => self::sanitize_responsive( $settings['background'] ?? null, array( self::class, 'sanitize_background_value' ), array( 'type' => 'color', 'color' => '#ffffff' ) ),
 					'textAlign'  => self::sanitize_responsive( $settings['textAlign'] ?? null, array( self::class, 'sanitize_text_align' ), 'left' ),
-					'padding'    => self::sanitize_responsive( $settings['padding'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, 0, 200, array( 'top' => 48, 'right' => 24, 'bottom' => 48, 'left' => 24 ) ); }, array( 'top' => 48, 'right' => 24, 'bottom' => 48, 'left' => 24 ) ),
-					'margin'     => self::sanitize_responsive( $settings['margin'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, -200, 200, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ); }, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ),
+					'padding'    => self::sanitize_responsive( $settings['padding'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, array( 'top' => '48px', 'right' => '24px', 'bottom' => '48px', 'left' => '24px' ) ); }, array( 'top' => '48px', 'right' => '24px', 'bottom' => '48px', 'left' => '24px' ) ),
+					'margin'     => self::sanitize_responsive( $settings['margin'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, array( 'top' => '0px', 'right' => '0px', 'bottom' => '0px', 'left' => '0px' ) ); }, array( 'top' => '0px', 'right' => '0px', 'bottom' => '0px', 'left' => '0px' ) ),
 				),
 				'children' => $items,
 			);
@@ -182,8 +182,8 @@ final class MVL_Plugin {
 			'data'     => array(),
 			'settings' => array(
 				'background' => self::sanitize_responsive( $settings['background'] ?? null, array( self::class, 'sanitize_background_value' ), array( 'type' => 'none' ) ),
-				'padding'    => self::sanitize_responsive( $settings['padding'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, 0, 200, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ); }, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ),
-				'margin'     => self::sanitize_responsive( $settings['margin'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, -200, 200, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ); }, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ),
+				'padding'    => self::sanitize_responsive( $settings['padding'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, array( 'top' => '0px', 'right' => '0px', 'bottom' => '0px', 'left' => '0px' ) ); }, array( 'top' => '0px', 'right' => '0px', 'bottom' => '0px', 'left' => '0px' ) ),
+				'margin'     => self::sanitize_responsive( $settings['margin'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, array( 'top' => '0px', 'right' => '0px', 'bottom' => '0px', 'left' => '0px' ) ); }, array( 'top' => '0px', 'right' => '0px', 'bottom' => '0px', 'left' => '0px' ) ),
 			),
 		);
 		if ( 'heading' === $type ) { $clean['data'] = array( 'text' => sanitize_text_field( $data['text'] ?? '' ), 'level' => in_array( (int) ( $data['level'] ?? 2 ), array( 1, 2, 3, 4, 5, 6 ), true ) ? (int) $data['level'] : 2 ); }
@@ -202,16 +202,36 @@ final class MVL_Plugin {
 		return in_array( $value, array( 'left', 'center', 'right' ), true ) ? $value : 'left';
 	}
 
-	private static function sanitize_spacing( $value, int $min, int $max, array $default ): array {
+	/**
+	 * Un lado de padding/margin admite cualquier unidad CSS (px, %, em, rem, vh, vw),
+	 * no solo píxeles; los valores numéricos planos (formato antiguo) se asumen en px.
+	 */
+	private static function sanitize_spacing_side( $value, string $default ): string {
 		if ( is_numeric( $value ) ) {
+			return self::format_spacing_number( (float) $value ) . 'px';
+		}
+		if ( is_string( $value ) && preg_match( '/^(-?\d+(?:\.\d+)?)(px|%|em|rem|vh|vw)$/', trim( $value ), $matches ) ) {
+			return self::format_spacing_number( (float) $matches[1] ) . $matches[2];
+		}
+		return $default;
+	}
+
+	private static function format_spacing_number( float $num ): string {
+		$num = max( -1000, min( 1000, $num ) );
+		$str = rtrim( rtrim( number_format( $num, 3, '.', '' ), '0' ), '.' );
+		return '' !== $str ? $str : '0';
+	}
+
+	private static function sanitize_spacing( $value, array $default ): array {
+		if ( is_numeric( $value ) || ( is_string( $value ) && preg_match( '/^-?\d+(?:\.\d+)?(px|%|em|rem|vh|vw)$/', trim( $value ) ) ) ) {
 			$value = array( 'top' => $value, 'bottom' => $value );
 		}
 		$value  = is_array( $value ) ? $value : array();
 		$result = array();
-		foreach ( $default as $side => $fallback ) {
-			$raw             = is_numeric( $value[ $side ] ?? null ) ? (int) $value[ $side ] : $fallback;
-			$result[ $side ] = max( $min, min( $max, $raw ) );
+		foreach ( array( 'top', 'right', 'bottom', 'left' ) as $side ) {
+			$result[ $side ] = self::sanitize_spacing_side( $value[ $side ] ?? null, $default[ $side ] );
 		}
+		$result['linked'] = ! empty( $value['linked'] );
 		return $result;
 	}
 
@@ -287,7 +307,7 @@ final class MVL_Plugin {
 	}
 
 	private static function spacing_css( array $spacing ): string {
-		return absint_signed( $spacing['top'] ) . 'px ' . absint_signed( $spacing['right'] ) . 'px ' . absint_signed( $spacing['bottom'] ) . 'px ' . absint_signed( $spacing['left'] ) . 'px';
+		return esc_attr( $spacing['top'] ) . ' ' . esc_attr( $spacing['right'] ) . ' ' . esc_attr( $spacing['bottom'] ) . ' ' . esc_attr( $spacing['left'] );
 	}
 
 	private static function background_css( array $bg ): string {
@@ -433,14 +453,5 @@ final class MVL_Plugin {
 		}
 		wp_enqueue_style( 'mvl-preview', plugins_url( 'assets/preview.css', self::$plugin_file ), array(), '0.1.0' );
 		wp_enqueue_script( 'mvl-preview', plugins_url( 'assets/preview.js', self::$plugin_file ), array(), '0.1.0', true );
-	}
-}
-
-if ( ! function_exists( 'absint_signed' ) ) {
-	/**
-	 * Como absint() pero preserva el signo (el margen admite valores negativos).
-	 */
-	function absint_signed( $value ): int {
-		return (int) $value;
 	}
 }
