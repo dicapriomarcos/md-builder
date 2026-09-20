@@ -41,6 +41,10 @@ body.mvl-fullscreen .mvl-admin-wrap{position:fixed;inset:0;margin:0;z-index:1000
 .mvl-empty{color:#646970;font-style:italic}
 .mvl-topbar .mvl-toggle-structure{background:transparent;border:1px solid #3c434a;color:#fff;border-radius:3px;padding:4px 8px;cursor:pointer;line-height:1}
 .mvl-topbar .mvl-toggle-structure.is-active{background:#2271b1;border-color:#2271b1}
+.mvl-topbar .mvl-toggle-fullscreen{background:transparent;border:1px solid #3c434a;color:#fff;border-radius:3px;padding:4px 8px;cursor:pointer;line-height:1;white-space:nowrap}
+.mvl-topbar .mvl-toggle-fullscreen.is-active{background:#2271b1;border-color:#2271b1}
+.mvl-shell.mvl-focus-mode{grid-template-columns:0 1fr 0}
+.mvl-shell.mvl-focus-mode .mvl-left,.mvl-shell.mvl-focus-mode .mvl-right{padding:0;border:0;overflow:hidden}
 .mvl-structure-panel{position:fixed;top:64px;left:16px;width:260px;max-height:70vh;overflow:auto;background:#fff;border:1px solid #dcdcde;border-radius:4px;box-shadow:0 6px 20px #0004;z-index:100001;padding:14px}
 .mvl-structure-panel h2{font-size:13px;text-transform:uppercase;margin-top:0;display:flex;justify-content:space-between;align-items:center}
 .mvl-structure-panel .mvl-close{border:0;background:transparent;cursor:pointer;font-size:16px;line-height:1;color:#646970}

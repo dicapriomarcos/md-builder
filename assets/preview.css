@@ -1,6 +1,6 @@
 .mvl-layout{width:100%}
 .mvl-section{box-sizing:border-box}
-.mvl-container{max-width:1140px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.mvl-container{max-width:1140px;margin:0 auto;display:flex;flex-wrap:wrap}
 .mvl-item{box-sizing:border-box}
 .mvl-heading{margin:0}
 .mvl-text{margin:0}

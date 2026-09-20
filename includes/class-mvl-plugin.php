@@ -12,6 +12,7 @@ final class MVL_Plugin {
 		self::$plugin_file = $plugin_file;
 		add_action( 'admin_menu', array( self::class, 'add_builder_page' ) );
 		add_action( 'add_meta_boxes', array( self::class, 'add_builder_link' ), 10, 2 );
+		add_action( 'edit_form_after_title', array( self::class, 'render_content_cta' ) );
 		add_action( 'admin_enqueue_scripts', array( self::class, 'enqueue_admin_assets' ) );
 		add_filter( 'admin_body_class', array( self::class, 'filter_admin_body_class' ) );
 		add_action( 'rest_api_init', array( self::class, 'register_routes' ) );
@@ -58,6 +59,27 @@ final class MVL_Plugin {
 	public static function render_builder_link( WP_Post $post, array $box ): void {
 		$url = add_query_arg( array( 'page' => 'mvl-builder', 'post_id' => (int) $box['args']['post_id'] ), admin_url( 'admin.php' ) );
 		echo '<p>Diseña esta página en una vista que usa el tema real.</p><p><a class="button button-primary" href="' . esc_url( $url ) . '">Abrir maquetador</a></p>';
+	}
+
+	/**
+	 * Cuando una página ya está maquetada, su post_content es el HTML/CSS generado
+	 * por el builder (con el JSON del layout en un comentario). Editarlo a mano desde
+	 * el editor de WordPress puede romper ese JSON, así que se muestra un botón bien
+	 * visible, justo encima del editor de contenido, para volver siempre al maquetador.
+	 */
+	public static function render_content_cta( WP_Post $post ): void {
+		if ( ! in_array( $post->post_type, array( 'page', 'post' ), true ) || ! current_user_can( 'edit_post', $post->ID ) ) {
+			return;
+		}
+		if ( ! str_contains( $post->post_content, '<!-- mvl:document' ) ) {
+			return;
+		}
+		$url = add_query_arg( array( 'page' => 'mvl-builder', 'post_id' => $post->ID ), admin_url( 'admin.php' ) );
+		echo '<div class="mvl-content-cta">'
+			. '<p>' . esc_html__( 'Esta página está maquetada con el Maquetador Visual Ligero. Para no romper el diseño, editala siempre desde ahí.', 'maquetador-visual-ligero' ) . '</p>'
+			. '<a class="button button-primary button-hero" href="' . esc_url( $url ) . '">' . esc_html__( 'Editar con el Maquetador Visual', 'maquetador-visual-ligero' ) . '</a>'
+			. '</div>'
+			. '<style>.mvl-content-cta{margin:20px 0;padding:20px;background:#fff;border:1px solid #dcdcde;border-left:4px solid #2271b1;border-radius:2px}.mvl-content-cta p{margin-top:0;font-size:14px}</style>';
 	}
 
 	public static function filter_admin_body_class( string $classes ): string {
@@ -162,7 +184,12 @@ final class MVL_Plugin {
 				'type'     => 'section',
 				'settings' => array(
 	'background' => self::sanitize_responsive( $settings['background'] ?? null, array( self::class, 'sanitize_background_value' ), array( 'type' => 'color', 'color' => '#ffffff' ) ),
+					'tag'        => in_array( $settings['tag'] ?? '', array( 'div', 'section', 'article' ), true ) ? $settings['tag'] : 'section',
 					'textAlign'  => self::sanitize_responsive( $settings['textAlign'] ?? null, array( self::class, 'sanitize_text_align' ), 'left' ),
+					'gap'        => self::sanitize_responsive( $settings['gap'] ?? null, static function ( $v ) { return self::sanitize_spacing_side( $v, '16px' ); }, '16px' ),
+					'flexDirection'  => self::sanitize_responsive( $settings['flexDirection'] ?? null, array( self::class, 'sanitize_flex_direction' ), 'column' ),
+					'justifyContent' => self::sanitize_responsive( $settings['justifyContent'] ?? null, array( self::class, 'sanitize_justify_content' ), 'flex-start' ),
+					'alignItems'     => self::sanitize_responsive( $settings['alignItems'] ?? null, array( self::class, 'sanitize_align_items' ), 'stretch' ),
 					'padding'    => self::sanitize_responsive( $settings['padding'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, array( 'top' => '48px', 'right' => '24px', 'bottom' => '48px', 'left' => '24px' ) ); }, array( 'top' => '48px', 'right' => '24px', 'bottom' => '48px', 'left' => '24px' ) ),
 					'margin'     => self::sanitize_responsive( $settings['margin'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, array( 'top' => '0px', 'right' => '0px', 'bottom' => '0px', 'left' => '0px' ) ); }, array( 'top' => '0px', 'right' => '0px', 'bottom' => '0px', 'left' => '0px' ) ),
 				),
@@ -200,6 +227,18 @@ final class MVL_Plugin {
 
 	private static function sanitize_text_align( $value ): string {
 		return in_array( $value, array( 'left', 'center', 'right' ), true ) ? $value : 'left';
+	}
+
+	private static function sanitize_flex_direction( $value ): string {
+		return in_array( $value, array( 'row', 'column' ), true ) ? $value : 'column';
+	}
+
+	private static function sanitize_justify_content( $value ): string {
+		return in_array( $value, array( 'flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly' ), true ) ? $value : 'flex-start';
+	}
+
+	private static function sanitize_align_items( $value ): string {
+		return in_array( $value, array( 'stretch', 'flex-start', 'center', 'flex-end' ), true ) ? $value : 'stretch';
 	}
 
 	/**
@@ -393,12 +432,36 @@ final class MVL_Plugin {
 			$base_rules   .= $base;
 			$tablet_rules .= $tablet;
 			$mobile_rules .= $mobile;
-			$base_rules   .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['desktop'] ) . '}';
+			$base_rules   .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['desktop'] ) . ';gap:' . esc_attr( $settings['gap']['desktop'] ) . ';flex-direction:' . esc_attr( $settings['flexDirection']['desktop'] ) . ';justify-content:' . esc_attr( $settings['justifyContent']['desktop'] ) . ';align-items:' . esc_attr( $settings['alignItems']['desktop'] ) . '}';
 			if ( null !== $settings['textAlign']['tablet'] ) {
 				$tablet_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['tablet'] ) . '}';
 			}
 			if ( null !== $settings['textAlign']['mobile'] ) {
 				$mobile_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['mobile'] ) . '}';
+			}
+			if ( null !== $settings['gap']['tablet'] ) {
+				$tablet_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{gap:' . esc_attr( $settings['gap']['tablet'] ) . '}';
+			}
+			if ( null !== $settings['gap']['mobile'] ) {
+				$mobile_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{gap:' . esc_attr( $settings['gap']['mobile'] ) . '}';
+			}
+			if ( null !== $settings['flexDirection']['tablet'] ) {
+				$tablet_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{flex-direction:' . esc_attr( $settings['flexDirection']['tablet'] ) . '}';
+			}
+			if ( null !== $settings['flexDirection']['mobile'] ) {
+				$mobile_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{flex-direction:' . esc_attr( $settings['flexDirection']['mobile'] ) . '}';
+			}
+			if ( null !== $settings['justifyContent']['tablet'] ) {
+				$tablet_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{justify-content:' . esc_attr( $settings['justifyContent']['tablet'] ) . '}';
+			}
+			if ( null !== $settings['justifyContent']['mobile'] ) {
+				$mobile_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{justify-content:' . esc_attr( $settings['justifyContent']['mobile'] ) . '}';
+			}
+			if ( null !== $settings['alignItems']['tablet'] ) {
+				$tablet_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{align-items:' . esc_attr( $settings['alignItems']['tablet'] ) . '}';
+			}
+			if ( null !== $settings['alignItems']['mobile'] ) {
+				$mobile_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{align-items:' . esc_attr( $settings['alignItems']['mobile'] ) . '}';
 			}
 			foreach ( $section['children'] as $item ) {
 				list( $ibase, $itablet, $imobile ) = self::build_style_block( '[data-mvl-uid="' . esc_attr( $item['id'] ) . '"]', $item['settings'] );
@@ -419,8 +482,9 @@ final class MVL_Plugin {
 		$html = $style . '<div class="mvl-layout">';
 		foreach ( $layout as $section ) {
 			$section_has_video = self::has_video_bg( $section['settings'] );
+			$container_tag     = in_array( $section['settings']['tag'] ?? '', array( 'div', 'section', 'article' ), true ) ? $section['settings']['tag'] : 'section';
 			$html .= '<!-- mvl:section ' . self::json_for_comment( array( 'uid' => $section['id'], 'settings' => $section['settings'] ) ) . ' -->' . "\n";
-			$html .= '<section class="mvl-section mvl-bg-host' . ( $section_has_video ? ' mvl-has-video-bg' : '' ) . '" data-mvl-uid="' . esc_attr( $section['id'] ) . '">';
+			$html .= '<' . $container_tag . ' class="mvl-section mvl-bg-host' . ( $section_has_video ? ' mvl-has-video-bg' : '' ) . '" data-mvl-uid="' . esc_attr( $section['id'] ) . '">';
 			if ( $section_has_video ) {
 				$html .= self::bg_video_html( $section['settings'] );
 			}
@@ -441,7 +505,7 @@ final class MVL_Plugin {
 				if ( 'image' === $item['type'] && $data['url'] ) { $html .= '<img class="mvl-image" src="' . esc_url( $data['url'] ) . '" alt="' . esc_attr( $data['alt'] ) . '">'; }
 				$html .= '</div>' . "\n<!-- /mvl:" . esc_html( $item['type'] ) . " -->\n";
 			}
-			$html .= '</div></section>' . "\n<!-- /mvl:section -->\n";
+			$html .= '</div></' . $container_tag . '>' . "\n<!-- /mvl:section -->\n";
 		}
 		return $html . '</div>';
 	}

@@ -1,8 +1,9 @@
 (function () {
   'use strict';
-  var state = { layout: MVL.layout || [], selected: null, dirty: false, leftCollapsed: false, showStructure: false, device: 'desktop', tab: 'content' };
+  var state = { layout: MVL.layout || [], selected: null, dirty: false, leftCollapsed: false, showStructure: false, device: 'desktop', tab: 'content', fullscreen: false };
   var root = document.getElementById('mvl-builder');
-  var labels = { section: 'Sección', heading: 'Título', text: 'Texto', button: 'Botón', image: 'Imagen' };
+  var labels = { section: 'Contenedor', heading: 'Título', text: 'Texto', button: 'Botón', image: 'Imagen' };
+  var containerTags = { div: 'div', section: 'section', article: 'article' };
   var icons = { section: 'dashicons-align-wide', heading: 'dashicons-heading', text: 'dashicons-text-page', button: 'dashicons-button', image: 'dashicons-format-image' };
   var deviceLabels = { desktop: 'Escritorio', tablet: 'Tablet', mobile: 'Móvil' };
   var sideLabels = { top: 'Arriba', right: 'Derecha', bottom: 'Abajo', left: 'Izquierda' };
@@ -69,7 +70,7 @@
 
   function add(type) {
     if (type === 'section') {
-      var section = { id: id(), type: 'section', settings: Object.assign(defaultSettings('section'), { textAlign: respDefault('left') }), children: [] };
+      var section = { id: id(), type: 'section', settings: Object.assign(defaultSettings('section'), { textAlign: respDefault('left'), tag: 'section', gap: respDefault('16px'), flexDirection: respDefault('column'), justifyContent: respDefault('flex-start'), alignItems: respDefault('stretch') }), children: [] };
       state.layout.push(section); state.selected = section.id; state.tab = 'style';
     } else {
       var section = currentSection(); if (!section) { add('section'); section = currentSection(); }
@@ -172,7 +173,16 @@
     var html = '<div class="mvl-device-note">Editando para: <strong>' + deviceLabels[device] + '</strong></div>';
     if (item.type === 'section') {
       var align = respGet(item.settings.textAlign, device);
+      var tag = item.settings.tag || 'section';
+      html += '<label>Elemento HTML<select data-setting="tag">' + Object.keys(containerTags).map(function (t) { return '<option value="' + t + '" ' + (tag === t ? 'selected' : '') + '>&lt;' + t + '&gt;</option>'; }).join('') + '</select></label>';
       html += '<label>Alineación' + resetButton('textAlign', item.settings.textAlign, device) + '<select data-resp="textAlign"><option value="left" ' + (align === 'left' ? 'selected' : '') + '>Izquierda</option><option value="center" ' + (align === 'center' ? 'selected' : '') + '>Centrada</option><option value="right" ' + (align === 'right' ? 'selected' : '') + '>Derecha</option></select></label>';
+      html += '<label>Espacio entre bloques <span class="mvl-hint">(px, %, em, rem, vh, vw)</span>' + resetButton('gap', item.settings.gap, device) + '<input data-resp="gap" type="text" placeholder="16px" value="' + escAttr(respGet(item.settings.gap, device)) + '"></label>';
+      var dir = respGet(item.settings.flexDirection, device);
+      html += '<label>Disposición' + resetButton('flexDirection', item.settings.flexDirection, device) + '<select data-resp="flexDirection"><option value="column" ' + (dir === 'column' ? 'selected' : '') + '>Columna (vertical)</option><option value="row" ' + (dir === 'row' ? 'selected' : '') + '>Fila (horizontal)</option></select></label>';
+      var justify = respGet(item.settings.justifyContent, device);
+      html += '<label>Justificar contenido' + resetButton('justifyContent', item.settings.justifyContent, device) + '<select data-resp="justifyContent">' + [['flex-start', 'Inicio'], ['center', 'Centro'], ['flex-end', 'Final'], ['space-between', 'Espacio entre'], ['space-around', 'Espacio alrededor'], ['space-evenly', 'Espacio uniforme']].map(function (o) { return '<option value="' + o[0] + '" ' + (justify === o[0] ? 'selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>';
+      var alignItems = respGet(item.settings.alignItems, device);
+      html += '<label>Alinear elementos' + resetButton('alignItems', item.settings.alignItems, device) + '<select data-resp="alignItems">' + [['stretch', 'Estirar'], ['flex-start', 'Inicio'], ['center', 'Centro'], ['flex-end', 'Final']].map(function (o) { return '<option value="' + o[0] + '" ' + (alignItems === o[0] ? 'selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>';
     }
     html += backgroundControls(item.settings.background, device);
     return html;
@@ -211,7 +221,7 @@
   function tree() {
     return state.layout.map(function (s, si) {
       var items = s.children.map(function (i) { return '<button class="mvl-tree-item ' + (state.selected === i.id ? 'is-selected' : '') + '" draggable="true" data-select="' + i.id + '" data-drag-item="' + i.id + '" data-drag-section="' + s.id + '">' + labels[i.type] + '</button>'; }).join('');
-      return '<div class="mvl-tree-section ' + (state.selected === s.id ? 'is-selected' : '') + '" data-id="' + s.id + '"><button draggable="true" data-select="' + s.id + '" data-drag-section-handle="' + s.id + '">Sección ' + (si + 1) + '</button>' + items + '</div>';
+      return '<div class="mvl-tree-section ' + (state.selected === s.id ? 'is-selected' : '') + '" data-id="' + s.id + '"><button draggable="true" data-select="' + s.id + '" data-drag-section-handle="' + s.id + '">Contenedor ' + (si + 1) + '</button>' + items + '</div>';
     }).join('') || '<p class="mvl-empty">Añade una sección para empezar.</p>';
   }
 
@@ -229,6 +239,15 @@
         if (el.dataset.field === 'size' && item.data.id && attachmentSizesCache[item.data.id] && attachmentSizesCache[item.data.id][value]) {
           item.data.url = attachmentSizesCache[item.data.id][value];
         }
+        markDirtyLite();
+      });
+    });
+
+    container.querySelectorAll('[data-setting]').forEach(function (el) {
+      el.addEventListener('input', function () {
+        var item = selectedItem();
+        if (!item) return;
+        item.settings[el.dataset.setting] = el.value;
         markDirtyLite();
       });
     });
@@ -411,6 +430,7 @@
       + '<button class="mvl-device" data-device="mobile" title="Móvil">📲</button>'
       + '</div>'
       + '<button class="mvl-toggle-structure" data-action="toggle-structure" title="Estructura">Estructura</button>'
+      + '<button class="mvl-toggle-fullscreen" data-action="toggle-fullscreen" title="Pantalla completa">⛶ Pantalla completa</button>'
       + '<span class="mvl-status"></span>'
       + '<button class="button button-primary" data-action="save">Guardar</button>'
       + '</header>'
@@ -423,6 +443,7 @@
     refs.shell = root.querySelector('.mvl-shell');
     refs.status = root.querySelector('.mvl-status');
     refs.toggleStructureBtn = root.querySelector('[data-action="toggle-structure"]');
+    refs.toggleFullscreenBtn = root.querySelector('[data-action="toggle-fullscreen"]');
     refs.inspector = root.querySelector('.mvl-inspector');
     refs.canvasFrame = root.querySelector('.mvl-canvas-frame');
     refs.devices = root.querySelectorAll('[data-device]');
@@ -442,15 +463,35 @@
         if (b.dataset.action === 'down') move(1);
         if (b.dataset.action === 'toggle-left') { state.leftCollapsed = !state.leftCollapsed; update(); }
         if (b.dataset.action === 'toggle-structure') { state.showStructure = !state.showStructure; update(); }
+        if (b.dataset.action === 'toggle-fullscreen') { toggleFullscreen(); }
       };
     });
     refs.devices.forEach(function (b) { b.onclick = function () { state.device = b.dataset.device; update(); }; });
+
+    if (document.addEventListener) {
+      document.addEventListener('fullscreenchange', function () {
+        state.fullscreen = !!document.fullscreenElement;
+        update();
+      });
+    }
+  }
+
+  function toggleFullscreen() {
+    state.fullscreen = !state.fullscreen;
+    if (state.fullscreen) {
+      if (root.requestFullscreen) root.requestFullscreen().catch(function () {});
+    } else if (document.fullscreenElement) {
+      document.exitFullscreen().catch(function () {});
+    }
+    update();
   }
 
   function update() {
     refs.shell.classList.toggle('is-left-collapsed', state.leftCollapsed);
     refs.status.textContent = state.dirty ? 'Cambios sin guardar' : 'Guardado';
     refs.toggleStructureBtn.classList.toggle('is-active', state.showStructure);
+    refs.toggleFullscreenBtn.classList.toggle('is-active', state.fullscreen);
+    refs.shell.classList.toggle('mvl-focus-mode', state.fullscreen);
     refs.canvasFrame.className = 'mvl-canvas-frame' + (state.device && state.device !== 'desktop' ? ' is-' + state.device : '');
     refs.devices.forEach(function (b) { b.classList.toggle('is-active', (state.device || 'desktop') === b.dataset.device); });
 
@@ -512,9 +553,17 @@
       var uid = section.id;
       var sr = styleBlock('[data-mvl-uid="' + uid + '"]', section.settings);
       base += sr.base; tablet += sr.tablet; mobile += sr.mobile;
-      base += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + section.settings.textAlign.desktop + '}';
+      base += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + section.settings.textAlign.desktop + ';gap:' + cssLength(section.settings.gap.desktop) + ';flex-direction:' + section.settings.flexDirection.desktop + ';justify-content:' + section.settings.justifyContent.desktop + ';align-items:' + section.settings.alignItems.desktop + '}';
       if (section.settings.textAlign.tablet != null) tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + section.settings.textAlign.tablet + '}';
       if (section.settings.textAlign.mobile != null) mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + section.settings.textAlign.mobile + '}';
+      if (section.settings.gap.tablet != null) tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{gap:' + cssLength(section.settings.gap.tablet) + '}';
+      if (section.settings.gap.mobile != null) mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{gap:' + cssLength(section.settings.gap.mobile) + '}';
+      if (section.settings.flexDirection.tablet != null) tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{flex-direction:' + section.settings.flexDirection.tablet + '}';
+      if (section.settings.flexDirection.mobile != null) mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{flex-direction:' + section.settings.flexDirection.mobile + '}';
+      if (section.settings.justifyContent.tablet != null) tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{justify-content:' + section.settings.justifyContent.tablet + '}';
+      if (section.settings.justifyContent.mobile != null) mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{justify-content:' + section.settings.justifyContent.mobile + '}';
+      if (section.settings.alignItems.tablet != null) tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{align-items:' + section.settings.alignItems.tablet + '}';
+      if (section.settings.alignItems.mobile != null) mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{align-items:' + section.settings.alignItems.mobile + '}';
       section.children.forEach(function (item) {
         var ir = styleBlock('[data-mvl-uid="' + item.id + '"]', item.settings);
         base += ir.base; tablet += ir.tablet; mobile += ir.mobile;
@@ -541,7 +590,8 @@
         return '<div class="mvl-item mvl-item-' + item.type + ' mvl-bg-host' + (itemHasVideo ? ' mvl-has-video-bg' : '') + '"' + attr + '>' + videoHtml + content + '</div>';
       }).join('');
       var sectionVideo = hasVideo ? '<div class="mvl-bg-video"><video autoplay muted loop playsinline src="' + escAttr(section.settings.background.desktop.video.url) + '"></video></div>' : '';
-      return '<section class="mvl-section mvl-bg-host' + (hasVideo ? ' mvl-has-video-bg' : '') + '" data-mvl-uid="' + section.id + '">' + sectionVideo + '<div class="mvl-container" style="max-width:1140px;margin:0 auto">' + inner + '</div></section>';
+      var sectionTag = containerTags[section.settings.tag] ? section.settings.tag : 'section';
+      return '<' + sectionTag + ' class="mvl-section mvl-bg-host' + (hasVideo ? ' mvl-has-video-bg' : '') + '" data-mvl-uid="' + section.id + '">' + sectionVideo + '<div class="mvl-container" style="max-width:1140px;margin:0 auto">' + inner + '</div></' + sectionTag + '>';
     }).join('');
   }
 
