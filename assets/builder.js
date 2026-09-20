@@ -3,6 +3,7 @@
   var state = { layout: MVL.layout || [], selected: null, dirty: false, leftCollapsed: false, showStructure: false, device: 'desktop' };
   var root = document.getElementById('mvl-builder');
   var labels = { section: 'Sección', heading: 'Título', text: 'Texto', button: 'Botón', image: 'Imagen' };
+  var icons = { section: 'dashicons-align-wide', heading: 'dashicons-heading', text: 'dashicons-text-page', button: 'dashicons-button', image: 'dashicons-format-image' };
   var deviceLabels = { desktop: 'Escritorio', tablet: 'Tablet', mobile: 'Móvil' };
   var sideLabels = { top: 'Arriba', right: 'Derecha', bottom: 'Abajo', left: 'Izquierda' };
   var refs = {};
@@ -179,7 +180,7 @@
       + '<button class="button button-primary" data-action="save">Guardar</button>'
       + '</header>'
       + '<main class="mvl-shell">'
-      + '<aside class="mvl-left"><h2>Bloques</h2><div class="mvl-add">' + Object.keys(labels).map(function (type) { return '<button class="button" data-add="' + type + '">+ ' + labels[type] + '</button>'; }).join('') + '</div></aside>'
+      + '<aside class="mvl-left"><h2>Bloques</h2><div class="mvl-add">' + Object.keys(labels).map(function (type) { return '<button class="mvl-add-block" data-add="' + type + '"><span class="dashicons ' + icons[type] + '"></span><span class="mvl-add-label">' + labels[type] + '</span></button>'; }).join('') + '</div></aside>'
       + '<section class="mvl-canvas"><div class="mvl-canvas-frame"></div></section>'
       + '<aside class="mvl-right"><h2>Ajustes</h2><div class="mvl-inspector"></div><div class="mvl-actions"><button class="button" data-action="up">Subir</button><button class="button" data-action="down">Bajar</button><button class="button-link-delete" data-action="delete">Eliminar</button></div></aside>'
       + '</main>';

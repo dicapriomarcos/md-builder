@@ -16,6 +16,32 @@ final class MVL_Plugin {
 		add_filter( 'admin_body_class', array( self::class, 'filter_admin_body_class' ) );
 		add_action( 'rest_api_init', array( self::class, 'register_routes' ) );
 		add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_preview_assets' ) );
+		add_action( 'wp', array( self::class, 'maybe_disable_wpautop' ) );
+		add_action( 'plugins_loaded', array( self::class, 'maybe_disable_admin_bar' ) );
+	}
+
+	/**
+	 * La vista previa del maquetador carga la página real en un iframe; si el usuario
+	 * tiene la sesión abierta, WordPress le mete su barra de admin encima del diseño.
+	 * El filtro show_admin_bar hay que registrarlo antes de que corra _wp_admin_bar_init
+	 * (enganchado a 'init'), así que se hace en plugins_loaded.
+	 */
+	public static function maybe_disable_admin_bar(): void {
+		if ( isset( $_GET['mvl_preview'] ) && '1' === $_GET['mvl_preview'] ) {
+			add_filter( 'show_admin_bar', '__return_false' );
+		}
+	}
+
+	/**
+	 * El HTML que genera el maquetador ya trae su propio wpautop() por bloque de texto;
+	 * si se deja el wpautop global de WordPress, envuelve los saltos de línea entre
+	 * secciones en <p>/<br> sueltos y descuadra el layout.
+	 */
+	public static function maybe_disable_wpautop(): void {
+		$post = get_post();
+		if ( is_singular() && $post instanceof WP_Post && str_contains( $post->post_content, '<!-- mvl:document' ) ) {
+			remove_filter( 'the_content', 'wpautop' );
+		}
 	}
 
 	public static function add_builder_page(): void {
@@ -58,7 +84,7 @@ final class MVL_Plugin {
 		if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {
 			return;
 		}
-		wp_enqueue_style( 'mvl-builder', plugins_url( 'assets/builder.css', self::$plugin_file ), array(), '0.1.0' );
+		wp_enqueue_style( 'mvl-builder', plugins_url( 'assets/builder.css', self::$plugin_file ), array( 'dashicons' ), '0.1.0' );
 		wp_enqueue_script( 'mvl-builder', plugins_url( 'assets/builder.js', self::$plugin_file ), array(), '0.1.0', true );
 		wp_add_inline_script( 'mvl-builder', 'window.MVL = ' . wp_json_encode( array(
 			'postId'     => $post_id,
@@ -266,7 +292,8 @@ final class MVL_Plugin {
 	}
 
 	public static function enqueue_preview_assets(): void {
-		if ( ! isset( $_GET['mvl_preview'] ) || '1' !== $_GET['mvl_preview'] ) {
+		$is_preview = isset( $_GET['mvl_preview'] ) && '1' === $_GET['mvl_preview'];
+		if ( ! $is_preview && ! ( is_singular() && str_contains( get_post()->post_content ?? '', '<!-- mvl:document' ) ) ) {
 			return;
 		}
 		wp_enqueue_style( 'mvl-preview', plugins_url( 'assets/preview.css', self::$plugin_file ), array(), '0.1.0' );
