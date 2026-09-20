@@ -84,8 +84,9 @@ final class MVL_Plugin {
 		if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {
 			return;
 		}
+		wp_enqueue_media();
 		wp_enqueue_style( 'mvl-builder', plugins_url( 'assets/builder.css', self::$plugin_file ), array( 'dashicons' ), '0.1.0' );
-		wp_enqueue_script( 'mvl-builder', plugins_url( 'assets/builder.js', self::$plugin_file ), array(), '0.1.0', true );
+		wp_enqueue_script( 'mvl-builder', plugins_url( 'assets/builder.js', self::$plugin_file ), array( 'media-editor' ), '0.1.0', true );
 		wp_add_inline_script( 'mvl-builder', 'window.MVL = ' . wp_json_encode( array(
 			'postId'     => $post_id,
 			'restUrl'    => esc_url_raw( rest_url( 'mvl/v1/layout/' . $post_id ) ),
@@ -160,9 +161,10 @@ final class MVL_Plugin {
 				'id'       => sanitize_key( $section['id'] ?? wp_generate_uuid4() ),
 				'type'     => 'section',
 				'settings' => array(
-					'background' => self::sanitize_responsive( $settings['background'] ?? null, array( self::class, 'sanitize_color' ), '#ffffff' ),
+					'background' => self::sanitize_responsive( $settings['background'] ?? null, array( self::class, 'sanitize_background_value' ), array( 'type' => 'color', 'color' => '#ffffff' ) ),
 					'textAlign'  => self::sanitize_responsive( $settings['textAlign'] ?? null, array( self::class, 'sanitize_text_align' ), 'left' ),
-					'padding'    => self::sanitize_responsive( $settings['padding'] ?? null, array( self::class, 'sanitize_padding' ), array( 'top' => 48, 'right' => 24, 'bottom' => 48, 'left' => 24 ) ),
+					'padding'    => self::sanitize_responsive( $settings['padding'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, 0, 200, array( 'top' => 48, 'right' => 24, 'bottom' => 48, 'left' => 24 ) ); }, array( 'top' => 48, 'right' => 24, 'bottom' => 48, 'left' => 24 ) ),
+					'margin'     => self::sanitize_responsive( $settings['margin'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, -200, 200, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ); }, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ),
 				),
 				'children' => $items,
 			);
@@ -171,13 +173,23 @@ final class MVL_Plugin {
 	}
 
 	private static function sanitize_item( array $item ): array {
-		$type = $item['type'];
-		$data = is_array( $item['data'] ?? null ) ? $item['data'] : array();
-		$clean = array( 'id' => sanitize_key( $item['id'] ?? wp_generate_uuid4() ), 'type' => $type, 'data' => array() );
+		$type     = $item['type'];
+		$data     = is_array( $item['data'] ?? null ) ? $item['data'] : array();
+		$settings = is_array( $item['settings'] ?? null ) ? $item['settings'] : array();
+		$clean    = array(
+			'id'       => sanitize_key( $item['id'] ?? wp_generate_uuid4() ),
+			'type'     => $type,
+			'data'     => array(),
+			'settings' => array(
+				'background' => self::sanitize_responsive( $settings['background'] ?? null, array( self::class, 'sanitize_background_value' ), array( 'type' => 'none' ) ),
+				'padding'    => self::sanitize_responsive( $settings['padding'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, 0, 200, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ); }, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ),
+				'margin'     => self::sanitize_responsive( $settings['margin'] ?? null, static function ( $v ) { return self::sanitize_spacing( $v, -200, 200, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ); }, array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 ) ),
+			),
+		);
 		if ( 'heading' === $type ) { $clean['data'] = array( 'text' => sanitize_text_field( $data['text'] ?? '' ), 'level' => in_array( (int) ( $data['level'] ?? 2 ), array( 1, 2, 3, 4, 5, 6 ), true ) ? (int) $data['level'] : 2 ); }
 		if ( 'text' === $type ) { $clean['data'] = array( 'text' => wp_kses_post( $data['text'] ?? '' ) ); }
 		if ( 'button' === $type ) { $clean['data'] = array( 'text' => sanitize_text_field( $data['text'] ?? '' ), 'url' => esc_url_raw( $data['url'] ?? '' ) ); }
-		if ( 'image' === $type ) { $clean['data'] = array( 'url' => esc_url_raw( $data['url'] ?? '' ), 'alt' => sanitize_text_field( $data['alt'] ?? '' ) ); }
+		if ( 'image' === $type ) { $clean['data'] = array( 'url' => esc_url_raw( $data['url'] ?? '' ), 'alt' => sanitize_text_field( $data['alt'] ?? '' ), 'id' => absint( $data['id'] ?? 0 ), 'size' => sanitize_key( $data['size'] ?? 'full' ) ); }
 		return $clean;
 	}
 
@@ -190,18 +202,69 @@ final class MVL_Plugin {
 		return in_array( $value, array( 'left', 'center', 'right' ), true ) ? $value : 'left';
 	}
 
-	private static function sanitize_padding( $value ): array {
-		$default = array( 'top' => 48, 'right' => 24, 'bottom' => 48, 'left' => 24 );
+	private static function sanitize_spacing( $value, int $min, int $max, array $default ): array {
 		if ( is_numeric( $value ) ) {
-			// Compatibilidad con el antiguo "espaciado vertical" único.
 			$value = array( 'top' => $value, 'bottom' => $value );
 		}
-		$value = is_array( $value ) ? $value : array();
+		$value  = is_array( $value ) ? $value : array();
 		$result = array();
 		foreach ( $default as $side => $fallback ) {
-			$result[ $side ] = min( 160, absint( $value[ $side ] ?? $fallback ) );
+			$raw             = is_numeric( $value[ $side ] ?? null ) ? (int) $value[ $side ] : $fallback;
+			$result[ $side ] = max( $min, min( $max, $raw ) );
 		}
 		return $result;
+	}
+
+	private static function sanitize_bg_image( $value ): array {
+		$value = is_array( $value ) ? $value : array();
+		return array(
+			'url'      => esc_url_raw( $value['url'] ?? '' ),
+			'size'     => in_array( $value['size'] ?? '', array( 'cover', 'contain', 'auto' ), true ) ? $value['size'] : 'cover',
+			'position' => sanitize_text_field( $value['position'] ?? 'center center' ),
+			'repeat'   => in_array( $value['repeat'] ?? '', array( 'no-repeat', 'repeat' ), true ) ? $value['repeat'] : 'no-repeat',
+		);
+	}
+
+	private static function sanitize_gradient( $value ): array {
+		$value     = is_array( $value ) ? $value : array();
+		$type      = in_array( $value['type'] ?? '', array( 'linear', 'radial' ), true ) ? $value['type'] : 'linear';
+		$angle     = isset( $value['angle'] ) ? max( 0, min( 360, (int) $value['angle'] ) ) : 180;
+		$stops_raw = is_array( $value['stops'] ?? null ) ? array_slice( $value['stops'], 0, 6 ) : array();
+		$stops     = array();
+		foreach ( $stops_raw as $stop ) {
+			if ( ! is_array( $stop ) ) {
+				continue;
+			}
+			$stops[] = array(
+				'color' => self::sanitize_color( $stop['color'] ?? '#ffffff' ),
+				'pos'   => max( 0, min( 100, (int) ( $stop['pos'] ?? 0 ) ) ),
+			);
+		}
+		if ( count( $stops ) < 2 ) {
+			$stops = array( array( 'color' => '#ff0000', 'pos' => 0 ), array( 'color' => '#0000ff', 'pos' => 100 ) );
+		}
+		return array( 'type' => $type, 'angle' => $angle, 'stops' => $stops );
+	}
+
+	private static function sanitize_bg_video( $value ): array {
+		$value = is_array( $value ) ? $value : array();
+		return array( 'url' => esc_url_raw( $value['url'] ?? '' ) );
+	}
+
+	private static function sanitize_background_value( $value ): array {
+		if ( is_string( $value ) ) {
+			// Compatibilidad con el formato antiguo, donde el fondo era un color plano.
+			$value = array( 'type' => 'color', 'color' => $value );
+		}
+		$value = is_array( $value ) ? $value : array();
+		$type  = in_array( $value['type'] ?? '', array( 'none', 'color', 'image', 'gradient', 'video' ), true ) ? $value['type'] : 'none';
+		return array(
+			'type'     => $type,
+			'color'    => self::sanitize_color( $value['color'] ?? '#ffffff' ),
+			'image'    => self::sanitize_bg_image( $value['image'] ?? null ),
+			'gradient' => self::sanitize_gradient( $value['gradient'] ?? null ),
+			'video'    => self::sanitize_bg_video( $value['video'] ?? null ),
+		);
 	}
 
 	/**
@@ -223,8 +286,71 @@ final class MVL_Plugin {
 		);
 	}
 
-	private static function padding_css( array $padding ): string {
-		return absint( $padding['top'] ) . 'px ' . absint( $padding['right'] ) . 'px ' . absint( $padding['bottom'] ) . 'px ' . absint( $padding['left'] ) . 'px';
+	private static function spacing_css( array $spacing ): string {
+		return absint_signed( $spacing['top'] ) . 'px ' . absint_signed( $spacing['right'] ) . 'px ' . absint_signed( $spacing['bottom'] ) . 'px ' . absint_signed( $spacing['left'] ) . 'px';
+	}
+
+	private static function background_css( array $bg ): string {
+		if ( 'color' === $bg['type'] ) {
+			return 'background:' . esc_attr( $bg['color'] ) . ';';
+		}
+		if ( 'image' === $bg['type'] && $bg['image']['url'] ) {
+			return 'background-image:url(' . esc_url( $bg['image']['url'] ) . ');background-size:' . esc_attr( $bg['image']['size'] ) . ';background-position:' . esc_attr( $bg['image']['position'] ) . ';background-repeat:' . esc_attr( $bg['image']['repeat'] ) . ';';
+		}
+		if ( 'gradient' === $bg['type'] ) {
+			$stops = array_map( static function ( $stop ) { return esc_attr( $stop['color'] ) . ' ' . (int) $stop['pos'] . '%'; }, $bg['gradient']['stops'] );
+			$fn    = 'radial' === $bg['gradient']['type'] ? 'radial-gradient(circle, ' : 'linear-gradient(' . (int) $bg['gradient']['angle'] . 'deg, ';
+			return 'background:' . $fn . implode( ', ', $stops ) . ');';
+		}
+		return '';
+	}
+
+	private static function has_video_bg( array $settings ): bool {
+		return 'video' === $settings['background']['desktop']['type'] && '' !== $settings['background']['desktop']['video']['url'];
+	}
+
+	private static function bg_video_html( array $settings ): string {
+		return '<div class="mvl-bg-video"><video autoplay muted loop playsinline src="' . esc_url( $settings['background']['desktop']['video']['url'] ) . '"></video></div>';
+	}
+
+	/**
+	 * Construye las reglas CSS (base/tablet/mobile) de fondo + padding + margin
+	 * para un selector [data-mvl-uid], compartido entre secciones e items.
+	 *
+	 * @return array{0:string,1:string,2:string}
+	 */
+	private static function build_style_block( string $selector, array $settings ): array {
+		$base   = $selector . '{' . self::background_css( $settings['background']['desktop'] ) . 'padding:' . self::spacing_css( $settings['padding']['desktop'] ) . '!important;margin:' . self::spacing_css( $settings['margin']['desktop'] ) . '!important;}';
+		$tablet = '';
+		$mobile = '';
+		foreach ( array( 'tablet', 'mobile' ) as $device ) {
+			$bg   = $settings['background'][ $device ];
+			$pad  = $settings['padding'][ $device ];
+			$mar  = $settings['margin'][ $device ];
+			if ( null === $bg && null === $pad && null === $mar ) {
+				continue;
+			}
+			$decl = '';
+			if ( null !== $bg ) {
+				$decl .= self::background_css( $bg );
+			}
+			if ( null !== $pad ) {
+				$decl .= 'padding:' . self::spacing_css( $pad ) . '!important;';
+			}
+			if ( null !== $mar ) {
+				$decl .= 'margin:' . self::spacing_css( $mar ) . '!important;';
+			}
+			if ( ! $decl ) {
+				continue;
+			}
+			$rule = $selector . '{' . $decl . '}';
+			if ( 'tablet' === $device ) {
+				$tablet .= $rule;
+			} else {
+				$mobile .= $rule;
+			}
+		}
+		return array( $base, $tablet, $mobile );
 	}
 
 	private static function serialize_layout( array $layout ): string {
@@ -243,23 +369,22 @@ final class MVL_Plugin {
 		foreach ( $layout as $section ) {
 			$uid      = esc_attr( $section['id'] );
 			$settings = $section['settings'];
-			$base_rules .= '[data-mvl-uid="' . $uid . '"]{background:' . esc_attr( $settings['background']['desktop'] ) . ';padding:' . self::padding_css( $settings['padding']['desktop'] ) . '}';
-			$base_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['desktop'] ) . '}';
-			if ( null !== $settings['background']['tablet'] || null !== $settings['padding']['tablet'] || null !== $settings['textAlign']['tablet'] ) {
-				if ( null !== $settings['background']['tablet'] || null !== $settings['padding']['tablet'] ) {
-					$tablet_rules .= '[data-mvl-uid="' . $uid . '"]{' . ( null !== $settings['background']['tablet'] ? 'background:' . esc_attr( $settings['background']['tablet'] ) . ';' : '' ) . ( null !== $settings['padding']['tablet'] ? 'padding:' . self::padding_css( $settings['padding']['tablet'] ) . ';' : '' ) . '}';
-				}
-				if ( null !== $settings['textAlign']['tablet'] ) {
-					$tablet_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['tablet'] ) . '}';
-				}
+			list( $base, $tablet, $mobile ) = self::build_style_block( '[data-mvl-uid="' . $uid . '"]', $settings );
+			$base_rules   .= $base;
+			$tablet_rules .= $tablet;
+			$mobile_rules .= $mobile;
+			$base_rules   .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['desktop'] ) . '}';
+			if ( null !== $settings['textAlign']['tablet'] ) {
+				$tablet_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['tablet'] ) . '}';
 			}
-			if ( null !== $settings['background']['mobile'] || null !== $settings['padding']['mobile'] || null !== $settings['textAlign']['mobile'] ) {
-				if ( null !== $settings['background']['mobile'] || null !== $settings['padding']['mobile'] ) {
-					$mobile_rules .= '[data-mvl-uid="' . $uid . '"]{' . ( null !== $settings['background']['mobile'] ? 'background:' . esc_attr( $settings['background']['mobile'] ) . ';' : '' ) . ( null !== $settings['padding']['mobile'] ? 'padding:' . self::padding_css( $settings['padding']['mobile'] ) . ';' : '' ) . '}';
-				}
-				if ( null !== $settings['textAlign']['mobile'] ) {
-					$mobile_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['mobile'] ) . '}';
-				}
+			if ( null !== $settings['textAlign']['mobile'] ) {
+				$mobile_rules .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['mobile'] ) . '}';
+			}
+			foreach ( $section['children'] as $item ) {
+				list( $ibase, $itablet, $imobile ) = self::build_style_block( '[data-mvl-uid="' . esc_attr( $item['id'] ) . '"]', $item['settings'] );
+				$base_rules   .= $ibase;
+				$tablet_rules .= $itablet;
+				$mobile_rules .= $imobile;
 			}
 		}
 		$style = '<style>' . $base_rules;
@@ -273,18 +398,28 @@ final class MVL_Plugin {
 
 		$html = $style . '<div class="mvl-layout">';
 		foreach ( $layout as $section ) {
-			$section_data = array( 'uid' => $section['id'], 'background' => $section['settings']['background'], 'padding' => $section['settings']['padding'], 'textAlign' => $section['settings']['textAlign'] );
-			$html .= '<!-- mvl:section ' . self::json_for_comment( $section_data ) . ' -->' . "\n";
-			$html .= '<section class="mvl-section" data-mvl-uid="' . esc_attr( $section['id'] ) . '"><div class="mvl-container" style="max-width:1140px;margin:0 auto">';
+			$section_has_video = self::has_video_bg( $section['settings'] );
+			$html .= '<!-- mvl:section ' . self::json_for_comment( array( 'uid' => $section['id'], 'settings' => $section['settings'] ) ) . ' -->' . "\n";
+			$html .= '<section class="mvl-section mvl-bg-host' . ( $section_has_video ? ' mvl-has-video-bg' : '' ) . '" data-mvl-uid="' . esc_attr( $section['id'] ) . '">';
+			if ( $section_has_video ) {
+				$html .= self::bg_video_html( $section['settings'] );
+			}
+			$html .= '<div class="mvl-container" style="max-width:1140px;margin:0 auto">';
 			foreach ( $section['children'] as $item ) {
-				$data = $item['data'];
+				$data         = $item['data'];
+				$item_settings = $item['settings'];
+				$item_has_video = self::has_video_bg( $item_settings );
 				$attr = ' data-mvl-uid="' . esc_attr( $item['id'] ) . '"';
-				$html .= '<!-- mvl:' . esc_html( $item['type'] ) . ' ' . self::json_for_comment( array_merge( array( 'uid' => $item['id'] ), $data ) ) . ' -->' . "\n";
-				if ( 'heading' === $item['type'] ) { $tag = 'h' . (int) $data['level']; $html .= '<' . $tag . ' class="mvl-heading"' . $attr . '>' . esc_html( $data['text'] ) . '</' . $tag . '>'; }
-				if ( 'text' === $item['type'] ) { $html .= '<div class="mvl-text"' . $attr . '>' . wpautop( wp_kses_post( $data['text'] ) ) . '</div>'; }
-				if ( 'button' === $item['type'] ) { $html .= '<p' . $attr . '><a class="mvl-button" style="display:inline-block;padding:12px 20px;background:#135e96;color:#fff;border-radius:3px;text-decoration:none" href="' . esc_url( $data['url'] ) . '">' . esc_html( $data['text'] ) . '</a></p>'; }
-				if ( 'image' === $item['type'] && $data['url'] ) { $html .= '<img class="mvl-image" style="display:block;max-width:100%;height:auto"' . $attr . ' src="' . esc_url( $data['url'] ) . '" alt="' . esc_attr( $data['alt'] ) . '">'; }
-				$html .= "\n<!-- /mvl:" . esc_html( $item['type'] ) . " -->\n";
+				$html .= '<!-- mvl:' . esc_html( $item['type'] ) . ' ' . self::json_for_comment( array_merge( array( 'uid' => $item['id'], 'settings' => $item_settings ), $data ) ) . ' -->' . "\n";
+				$html .= '<div class="mvl-item mvl-item-' . esc_attr( $item['type'] ) . ' mvl-bg-host' . ( $item_has_video ? ' mvl-has-video-bg' : '' ) . '"' . $attr . '>';
+				if ( $item_has_video ) {
+					$html .= self::bg_video_html( $item_settings );
+				}
+				if ( 'heading' === $item['type'] ) { $tag = 'h' . (int) $data['level']; $html .= '<' . $tag . ' class="mvl-heading">' . esc_html( $data['text'] ) . '</' . $tag . '>'; }
+				if ( 'text' === $item['type'] ) { $html .= '<div class="mvl-text">' . wpautop( wp_kses_post( $data['text'] ) ) . '</div>'; }
+				if ( 'button' === $item['type'] ) { $html .= '<p><a class="mvl-button" href="' . esc_url( $data['url'] ) . '">' . esc_html( $data['text'] ) . '</a></p>'; }
+				if ( 'image' === $item['type'] && $data['url'] ) { $html .= '<img class="mvl-image" src="' . esc_url( $data['url'] ) . '" alt="' . esc_attr( $data['alt'] ) . '">'; }
+				$html .= '</div>' . "\n<!-- /mvl:" . esc_html( $item['type'] ) . " -->\n";
 			}
 			$html .= '</div></section>' . "\n<!-- /mvl:section -->\n";
 		}
@@ -298,5 +433,14 @@ final class MVL_Plugin {
 		}
 		wp_enqueue_style( 'mvl-preview', plugins_url( 'assets/preview.css', self::$plugin_file ), array(), '0.1.0' );
 		wp_enqueue_script( 'mvl-preview', plugins_url( 'assets/preview.js', self::$plugin_file ), array(), '0.1.0', true );
+	}
+}
+
+if ( ! function_exists( 'absint_signed' ) ) {
+	/**
+	 * Como absint() pero preserva el signo (el margen admite valores negativos).
+	 */
+	function absint_signed( $value ): int {
+		return (int) $value;
 	}
 }
