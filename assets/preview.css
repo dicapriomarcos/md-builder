@@ -1,0 +1,11 @@
+.mvl-layout{width:100%}
+.mvl-section{box-sizing:border-box}
+.mvl-container{max-width:1140px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.mvl-heading{margin:0!important}
+.mvl-text{margin:0!important}
+.mvl-text p{margin:0!important}
+.mvl-text p+p{margin-top:16px!important}
+.mvl-container>p{margin:0!important}
+.mvl-button{display:inline-block;padding:12px 20px;background:#135e96;color:#fff!important;border-radius:3px;text-decoration:none}
+.mvl-image{display:block;max-width:100%;height:auto;margin:0!important}
+

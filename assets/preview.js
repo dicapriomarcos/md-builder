@@ -1,0 +1,1 @@
+(function(){'use strict';if(!new URLSearchParams(location.search).has('mvl_preview'))return;document.addEventListener('click',function(e){var block=e.target.closest('[data-mvl-uid]');if(!block)return;e.preventDefault();window.parent.postMessage({type:'mvl-select',id:block.dataset.mvlUid},location.origin);});}());
