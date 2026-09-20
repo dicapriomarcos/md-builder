@@ -45,6 +45,17 @@ final class MVL_Plugin {
 		}
 	}
 
+	/**
+	 * Usa la fecha de modificación del archivo como versión del asset, para que el
+	 * navegador invalide el caché automáticamente en cada cambio (con una versión
+	 * fija, un simple guardado no alcanzaba para ver los cambios sin forzar recarga).
+	 */
+	private static function asset_version( string $relative_path ): string {
+		$path = plugin_dir_path( self::$plugin_file ) . $relative_path;
+		$mtime = file_exists( $path ) ? filemtime( $path ) : false;
+		return $mtime ? (string) $mtime : '0.1.0';
+	}
+
 	public static function add_builder_page(): void {
 		add_menu_page( 'Maquetador visual', 'Maquetador visual', 'edit_pages', 'mvl-builder', array( self::class, 'render_builder_page' ), 'dashicons-layout', 30 );
 	}
@@ -107,8 +118,8 @@ final class MVL_Plugin {
 			return;
 		}
 		wp_enqueue_media();
-		wp_enqueue_style( 'mvl-builder', plugins_url( 'assets/builder.css', self::$plugin_file ), array( 'dashicons' ), '0.1.0' );
-		wp_enqueue_script( 'mvl-builder', plugins_url( 'assets/builder.js', self::$plugin_file ), array( 'media-editor' ), '0.1.0', true );
+		wp_enqueue_style( 'mvl-builder', plugins_url( 'assets/builder.css', self::$plugin_file ), array( 'dashicons' ), self::asset_version( 'assets/builder.css' ) );
+		wp_enqueue_script( 'mvl-builder', plugins_url( 'assets/builder.js', self::$plugin_file ), array( 'media-editor' ), self::asset_version( 'assets/builder.js' ), true );
 		wp_add_inline_script( 'mvl-builder', 'window.MVL = ' . wp_json_encode( array(
 			'postId'     => $post_id,
 			'restUrl'    => esc_url_raw( rest_url( 'mvl/v1/layout/' . $post_id ) ),
@@ -543,7 +554,7 @@ final class MVL_Plugin {
 		}
 		if ( 'heading' === $item['type'] ) { $tag = 'h' . (int) $data['level']; $html .= '<' . $tag . ' class="mvl-heading">' . esc_html( $data['text'] ) . '</' . $tag . '>'; }
 		if ( 'text' === $item['type'] ) { $html .= '<div class="mvl-text">' . wpautop( wp_kses_post( $data['text'] ) ) . '</div>'; }
-		if ( 'button' === $item['type'] ) { $html .= '<p><a class="mvl-button" href="' . esc_url( $data['url'] ) . '">' . esc_html( $data['text'] ) . '</a></p>'; }
+		if ( 'button' === $item['type'] ) { $html .= '<a class="mvl-button" href="' . esc_url( $data['url'] ) . '">' . esc_html( $data['text'] ) . '</a>'; }
 		if ( 'image' === $item['type'] && $data['url'] ) { $html .= '<img class="mvl-image" src="' . esc_url( $data['url'] ) . '" alt="' . esc_attr( $data['alt'] ) . '">'; }
 		$html .= '</div>' . "\n<!-- /mvl:" . esc_html( $item['type'] ) . " -->\n";
 		return $html;
@@ -573,7 +584,7 @@ final class MVL_Plugin {
 		if ( ! $is_preview && ! ( is_singular() && str_contains( get_post()->post_content ?? '', '<!-- mvl:document' ) ) ) {
 			return;
 		}
-		wp_enqueue_style( 'mvl-preview', plugins_url( 'assets/preview.css', self::$plugin_file ), array(), '0.1.0' );
-		wp_enqueue_script( 'mvl-preview', plugins_url( 'assets/preview.js', self::$plugin_file ), array(), '0.1.0', true );
+		wp_enqueue_style( 'mvl-preview', plugins_url( 'assets/preview.css', self::$plugin_file ), array(), self::asset_version( 'assets/preview.css' ) );
+		wp_enqueue_script( 'mvl-preview', plugins_url( 'assets/preview.js', self::$plugin_file ), array(), self::asset_version( 'assets/preview.js' ), true );
 	}
 }
