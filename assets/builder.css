@@ -31,7 +31,7 @@ body.mvl-fullscreen .mvl-admin-wrap{position:fixed;inset:0;margin:0;z-index:1000
 .mvl-tree-section{margin:8px 0}
 .mvl-tree button{display:block;width:100%;border:0;background:transparent;text-align:left;padding:7px;cursor:grab}
 .mvl-tree button:active{cursor:grabbing}
-.mvl-tree-item{padding-left:24px!important;color:#50575e}
+.mvl-tree-item{color:#50575e}
 .mvl-tree .is-selected{background:#e7f1ff;color:#135e96}
 .mvl-inspector label{display:block;font-weight:600;margin:13px 0}
 .mvl-inspector input,.mvl-inspector textarea,.mvl-inspector select{width:100%;margin-top:5px}

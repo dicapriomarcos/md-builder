@@ -14,16 +14,16 @@
     { key: 'gradient', label: 'Degradado', icon: 'dashicons-color-picker' },
     { key: 'video', label: 'Video', icon: 'dashicons-video-alt3' }
   ];
+  var borderStyles = { none: 'Ninguno', solid: 'Sólido', dashed: 'Discontinuo', dotted: 'Punteado' };
   var mediaSizes = { thumbnail: 'Miniatura', medium: 'Mediana', medium_large: 'Mediana grande', large: 'Grande', full: 'Completa' };
   var attachmentSizesCache = {};
   var mediaFrame = null;
   var refs = {};
+  var MAX_NESTING_DEPTH = 4;
 
   function id() { return 'mvl-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   function esc(value) { var d = document.createElement('div'); d.textContent = value || ''; return d.innerHTML; }
   function escAttr(value) { return esc(value).replace(/"/g, '&quot;'); }
-  function selectedItem() { for (var s of state.layout) { if (s.id === state.selected) return s; for (var i of s.children) if (i.id === state.selected) return i; } return null; }
-  function currentSection() { for (var s of state.layout) { if (s.id === state.selected || s.children.some(function (i) { return i.id === state.selected; })) return s; } return state.layout[0]; }
   function markDirty() { state.dirty = true; update(); }
   /**
    * Para inputs de texto/número en los que el usuario sigue tecleando: actualiza el
@@ -34,6 +34,42 @@
     state.dirty = true;
     refs.status.textContent = 'Cambios sin guardar';
     refreshPreview();
+  }
+
+  /**
+   * El layout es un árbol: un contenedor puede tener otros contenedores como hijos.
+   * locate() busca un nodo por id recursivamente y devuelve también la lista que lo
+   * contiene (para reordenar/eliminar) y su contenedor padre directo (para saber
+   * dónde debe caer un bloque nuevo).
+   */
+  function locate(list, targetId, parentSection) {
+    for (var i = 0; i < list.length; i++) {
+      var node = list[i];
+      if (node.id === targetId) return { node: node, list: list, index: i, parentSection: parentSection || null };
+      if (node.type === 'section') {
+        var found = locate(node.children, targetId, node);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  function findLocation(targetId) { return targetId ? locate(state.layout, targetId, null) : null; }
+  function nodeDepth(targetId) {
+    var loc = findLocation(targetId), depth = 0;
+    while (loc && loc.parentSection) { depth++; loc = findLocation(loc.parentSection.id); }
+    return depth;
+  }
+  function selectedItem() { var loc = findLocation(state.selected); return loc ? loc.node : null; }
+  function currentSection() {
+    var loc = findLocation(state.selected);
+    if (!loc) return state.layout[0] || null;
+    return loc.node.type === 'section' ? loc.node : (loc.parentSection || state.layout[0] || null);
+  }
+  /** El contenedor donde debe insertarse un nuevo Contenedor: dentro del seleccionado si es un contenedor, si no como hermano de lo seleccionado, si no hay nada seleccionado va a nivel raíz. */
+  function containerForNewSection() {
+    var loc = findLocation(state.selected);
+    if (!loc) return null;
+    return loc.node.type === 'section' ? loc.node : loc.parentSection;
   }
 
   function respDefault(value) { return { desktop: value, tablet: null, mobile: null }; }
@@ -59,19 +95,27 @@
       video: { url: '' }
     };
   }
+  function defaultBorder() { return { style: 'none', width: '1px', color: '#000000', radius: '0px' }; }
   function defaultSpacing() { return { top: '0px', right: '0px', bottom: '0px', left: '0px', linked: false }; }
   function defaultSettings(kind) {
     return {
       background: respDefault(defaultBackground(kind === 'section' ? 'color' : 'none')),
+      border: respDefault(defaultBorder()),
       padding: respDefault(kind === 'section' ? { top: '48px', right: '24px', bottom: '48px', left: '24px', linked: false } : defaultSpacing()),
       margin: respDefault(defaultSpacing())
     };
   }
+  function newSectionSettings() {
+    return Object.assign(defaultSettings('section'), { textAlign: respDefault('left'), tag: 'section', gap: respDefault('16px'), flexDirection: respDefault('column'), justifyContent: respDefault('flex-start'), alignItems: respDefault('stretch') });
+  }
 
   function add(type) {
     if (type === 'section') {
-      var section = { id: id(), type: 'section', settings: Object.assign(defaultSettings('section'), { textAlign: respDefault('left'), tag: 'section', gap: respDefault('16px'), flexDirection: respDefault('column'), justifyContent: respDefault('flex-start'), alignItems: respDefault('stretch') }), children: [] };
-      state.layout.push(section); state.selected = section.id; state.tab = 'style';
+      var newSection = { id: id(), type: 'section', settings: newSectionSettings(), children: [] };
+      var target = containerForNewSection();
+      if (target && nodeDepth(target.id) + 1 >= MAX_NESTING_DEPTH) target = null;
+      if (target) target.children.push(newSection); else state.layout.push(newSection);
+      state.selected = newSection.id; state.tab = 'style';
     } else {
       var section = currentSection(); if (!section) { add('section'); section = currentSection(); }
       var data = type === 'heading' ? { text: 'Un título claro', level: 2 } : type === 'text' ? { text: 'Escribe aquí tu contenido.' } : type === 'button' ? { text: 'Saber más', url: '#' } : { url: '', alt: '', id: 0, size: 'full' };
@@ -79,8 +123,19 @@
     }
     markDirty();
   }
-  function remove() { if (!state.selected) return; state.layout = state.layout.filter(function (s) { return s.id !== state.selected; }); state.layout.forEach(function (s) { s.children = s.children.filter(function (i) { return i.id !== state.selected; }); }); state.selected = null; markDirty(); }
-  function move(delta) { var sec = currentSection(), item = selectedItem(); var list = item && item.type !== 'section' ? sec.children : state.layout; var index = list.findIndex(function (x) { return x.id === state.selected; }); if (index >= 0 && list[index + delta]) { var swap = list[index]; list[index] = list[index + delta]; list[index + delta] = swap; markDirty(); } }
+  function remove() {
+    var loc = findLocation(state.selected);
+    if (!loc) return;
+    loc.list.splice(loc.index, 1);
+    state.selected = null;
+    markDirty();
+  }
+  function move(delta) {
+    var loc = findLocation(state.selected);
+    if (!loc) return;
+    var list = loc.list, index = loc.index;
+    if (list[index + delta]) { var swap = list[index]; list[index] = list[index + delta]; list[index + delta] = swap; markDirty(); }
+  }
 
   function reorder(list, fromId, toId) {
     var from = list.findIndex(function (x) { return x.id === fromId; });
@@ -90,8 +145,11 @@
     list.splice(to, 0, moved);
     return true;
   }
-  function moveSection(fromId, toId) { if (reorder(state.layout, fromId, toId)) markDirty(); }
-  function moveItem(sectionId, fromId, toId) { var section = state.layout.find(function (s) { return s.id === sectionId; }); if (section && reorder(section.children, fromId, toId)) markDirty(); }
+  function moveNode(fromId, toId) {
+    var locFrom = findLocation(fromId), locTo = findLocation(toId);
+    if (!locFrom || !locTo || locFrom.list !== locTo.list) return;
+    if (reorder(locFrom.list, fromId, toId)) markDirty();
+  }
 
   function resetButton(key, resp, device) {
     if (!respHasOverride(resp, device)) return '';
@@ -168,6 +226,17 @@
     return html;
   }
 
+  function borderControls(resp, device) {
+    var value = respGet(resp, device);
+    var html = '<div class="mvl-field-group"><label class="mvl-group-label">Borde' + resetButton('border', resp, device) + '</label>';
+    html += '<label>Tipo<select data-border-field="style">' + Object.keys(borderStyles).map(function (s) { return '<option value="' + s + '" ' + (value.style === s ? 'selected' : '') + '>' + borderStyles[s] + '</option>'; }).join('') + '</select></label>';
+    html += '<label>Grosor <span class="mvl-hint">(px, em...)</span><input data-border-field="width" type="text" placeholder="1px" value="' + escAttr(value.width) + '"></label>';
+    html += '<label>Color<input data-border-field="color" type="color" value="' + escAttr(value.color) + '"></label>';
+    html += '<label>Radio <span class="mvl-hint">(px, %, em...)</span><input data-border-field="radius" type="text" placeholder="0px" value="' + escAttr(value.radius) + '"></label>';
+    html += '</div>';
+    return html;
+  }
+
   function stylePanel(item) {
     var device = state.device || 'desktop';
     var html = '<div class="mvl-device-note">Editando para: <strong>' + deviceLabels[device] + '</strong></div>';
@@ -185,6 +254,7 @@
       html += '<label>Alinear elementos' + resetButton('alignItems', item.settings.alignItems, device) + '<select data-resp="alignItems">' + [['stretch', 'Estirar'], ['flex-start', 'Inicio'], ['center', 'Centro'], ['flex-end', 'Final']].map(function (o) { return '<option value="' + o[0] + '" ' + (alignItems === o[0] ? 'selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>';
     }
     html += backgroundControls(item.settings.background, device);
+    html += borderControls(item.settings.border, device);
     return html;
   }
 
@@ -218,11 +288,18 @@
     return html;
   }
 
+  function treeNode(node, depth) {
+    var indent = ' style="padding-left:' + (depth * 16) + 'px"';
+    if (node.type === 'section') {
+      var inner = node.children.map(function (child) { return treeNode(child, depth + 1); }).join('');
+      return '<div class="mvl-tree-section ' + (state.selected === node.id ? 'is-selected' : '') + '" data-id="' + node.id + '">'
+        + '<button' + indent + ' draggable="true" data-select="' + node.id + '" data-drag-node="' + node.id + '">' + labels.section + '</button>'
+        + inner + '</div>';
+    }
+    return '<button class="mvl-tree-item ' + (state.selected === node.id ? 'is-selected' : '') + '"' + indent + ' draggable="true" data-select="' + node.id + '" data-drag-node="' + node.id + '">' + labels[node.type] + '</button>';
+  }
   function tree() {
-    return state.layout.map(function (s, si) {
-      var items = s.children.map(function (i) { return '<button class="mvl-tree-item ' + (state.selected === i.id ? 'is-selected' : '') + '" draggable="true" data-select="' + i.id + '" data-drag-item="' + i.id + '" data-drag-section="' + s.id + '">' + labels[i.type] + '</button>'; }).join('');
-      return '<div class="mvl-tree-section ' + (state.selected === s.id ? 'is-selected' : '') + '" data-id="' + s.id + '"><button draggable="true" data-select="' + s.id + '" data-drag-section-handle="' + s.id + '">Contenedor ' + (si + 1) + '</button>' + items + '</div>';
-    }).join('') || '<p class="mvl-empty">Añade una sección para empezar.</p>';
+    return state.layout.map(function (n) { return treeNode(n, 0); }).join('') || '<p class="mvl-empty">Añade un contenedor para empezar.</p>';
   }
 
   function bindDynamicEvents(container) {
@@ -327,6 +404,16 @@
       });
     });
 
+    container.querySelectorAll('[data-border-field]').forEach(function (el) {
+      el.addEventListener('input', function () {
+        var item = selectedItem();
+        if (!item) return;
+        var target = respEnsureOverride(item.settings.border, state.device || 'desktop');
+        target[el.dataset.borderField] = el.value;
+        markDirtyLite();
+      });
+    });
+
     container.querySelectorAll('[data-gradient-stop]').forEach(function (el) {
       el.addEventListener('input', function () {
         var item = selectedItem();
@@ -390,31 +477,16 @@
   }
 
   function bindDragAndDrop(container) {
-    var dragging = null;
-    container.querySelectorAll('[data-drag-section-handle]').forEach(function (handle) {
-      handle.addEventListener('dragstart', function (e) { dragging = { type: 'section', id: handle.dataset.dragSectionHandle }; e.dataTransfer.effectAllowed = 'move'; });
-    });
-    container.querySelectorAll('[data-drag-item]').forEach(function (handle) {
-      handle.addEventListener('dragstart', function (e) { e.stopPropagation(); dragging = { type: 'item', id: handle.dataset.dragItem, sectionId: handle.dataset.dragSection }; e.dataTransfer.effectAllowed = 'move'; });
-    });
-    container.querySelectorAll('.mvl-tree-section').forEach(function (row) {
-      row.addEventListener('dragover', function (e) { e.preventDefault(); });
-      row.addEventListener('drop', function (e) {
-        e.preventDefault();
-        if (!dragging) return;
-        var targetSectionId = row.dataset.id;
-        if (dragging.type === 'section' && dragging.id !== targetSectionId) moveSection(dragging.id, targetSectionId);
-        dragging = null;
-      });
-    });
-    container.querySelectorAll('.mvl-tree-item').forEach(function (row) {
-      row.addEventListener('dragover', function (e) { e.preventDefault(); e.stopPropagation(); });
-      row.addEventListener('drop', function (e) {
+    var draggingId = null;
+    container.querySelectorAll('[data-drag-node]').forEach(function (handle) {
+      handle.addEventListener('dragstart', function (e) { e.stopPropagation(); draggingId = handle.dataset.dragNode; e.dataTransfer.effectAllowed = 'move'; });
+      handle.addEventListener('dragover', function (e) { e.preventDefault(); e.stopPropagation(); });
+      handle.addEventListener('drop', function (e) {
         e.preventDefault(); e.stopPropagation();
-        if (!dragging || dragging.type !== 'item') return;
-        var targetSectionId = row.dataset.dragSection, targetItemId = row.dataset.dragItem;
-        if (dragging.sectionId === targetSectionId && dragging.id !== targetItemId) moveItem(targetSectionId, dragging.id, targetItemId);
-        dragging = null;
+        if (!draggingId) return;
+        var targetId = handle.dataset.dragNode;
+        if (draggingId !== targetId) moveNode(draggingId, targetId);
+        draggingId = null;
       });
     });
   }
@@ -530,14 +602,21 @@
     return '';
   }
 
+  function borderCss(b) {
+    var css = 'border-radius:' + cssLength(b.radius) + ';';
+    css += b.style && b.style !== 'none' ? 'border:' + cssLength(b.width) + ' ' + b.style + ' ' + b.color + ';' : 'border:none;';
+    return css;
+  }
+
   function styleBlock(selector, settings) {
-    var base = selector + '{' + backgroundCss(settings.background.desktop) + 'padding:' + paddingCss(settings.padding.desktop) + '!important;margin:' + paddingCss(settings.margin.desktop) + '!important;}';
+    var base = selector + '{' + backgroundCss(settings.background.desktop) + borderCss(settings.border.desktop) + 'padding:' + paddingCss(settings.padding.desktop) + '!important;margin:' + paddingCss(settings.margin.desktop) + '!important;}';
     var tablet = '', mobile = '';
     ['tablet', 'mobile'].forEach(function (device) {
-      var bg = settings.background[device], pad = settings.padding[device], mar = settings.margin[device];
-      if (bg == null && pad == null && mar == null) return;
+      var bg = settings.background[device], bd = settings.border[device], pad = settings.padding[device], mar = settings.margin[device];
+      if (bg == null && bd == null && pad == null && mar == null) return;
       var decl = '';
       if (bg != null) decl += backgroundCss(bg);
+      if (bd != null) decl += borderCss(bd);
       if (pad != null) decl += 'padding:' + paddingCss(pad) + '!important;';
       if (mar != null) decl += 'margin:' + paddingCss(mar) + '!important;';
       if (!decl) return;
@@ -547,53 +626,56 @@
     return { base: base, tablet: tablet, mobile: mobile };
   }
 
-  function buildResponsiveCss(layout) {
-    var base = '', tablet = '', mobile = '';
-    layout.forEach(function (section) {
-      var uid = section.id;
-      var sr = styleBlock('[data-mvl-uid="' + uid + '"]', section.settings);
-      base += sr.base; tablet += sr.tablet; mobile += sr.mobile;
-      base += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + section.settings.textAlign.desktop + ';gap:' + cssLength(section.settings.gap.desktop) + ';flex-direction:' + section.settings.flexDirection.desktop + ';justify-content:' + section.settings.justifyContent.desktop + ';align-items:' + section.settings.alignItems.desktop + '}';
-      if (section.settings.textAlign.tablet != null) tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + section.settings.textAlign.tablet + '}';
-      if (section.settings.textAlign.mobile != null) mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + section.settings.textAlign.mobile + '}';
-      if (section.settings.gap.tablet != null) tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{gap:' + cssLength(section.settings.gap.tablet) + '}';
-      if (section.settings.gap.mobile != null) mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{gap:' + cssLength(section.settings.gap.mobile) + '}';
-      if (section.settings.flexDirection.tablet != null) tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{flex-direction:' + section.settings.flexDirection.tablet + '}';
-      if (section.settings.flexDirection.mobile != null) mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{flex-direction:' + section.settings.flexDirection.mobile + '}';
-      if (section.settings.justifyContent.tablet != null) tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{justify-content:' + section.settings.justifyContent.tablet + '}';
-      if (section.settings.justifyContent.mobile != null) mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{justify-content:' + section.settings.justifyContent.mobile + '}';
-      if (section.settings.alignItems.tablet != null) tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{align-items:' + section.settings.alignItems.tablet + '}';
-      if (section.settings.alignItems.mobile != null) mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{align-items:' + section.settings.alignItems.mobile + '}';
-      section.children.forEach(function (item) {
-        var ir = styleBlock('[data-mvl-uid="' + item.id + '"]', item.settings);
-        base += ir.base; tablet += ir.tablet; mobile += ir.mobile;
-      });
+  function collectRules(list, acc) {
+    list.forEach(function (node) {
+      var uid = node.id;
+      var r = styleBlock('[data-mvl-uid="' + uid + '"]', node.settings);
+      acc.base += r.base; acc.tablet += r.tablet; acc.mobile += r.mobile;
+      if (node.type === 'section') {
+        var s = node.settings;
+        acc.base += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + s.textAlign.desktop + ';gap:' + cssLength(s.gap.desktop) + ';flex-direction:' + s.flexDirection.desktop + ';justify-content:' + s.justifyContent.desktop + ';align-items:' + s.alignItems.desktop + '}';
+        if (s.textAlign.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + s.textAlign.tablet + '}';
+        if (s.textAlign.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + s.textAlign.mobile + '}';
+        if (s.gap.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{gap:' + cssLength(s.gap.tablet) + '}';
+        if (s.gap.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{gap:' + cssLength(s.gap.mobile) + '}';
+        if (s.flexDirection.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{flex-direction:' + s.flexDirection.tablet + '}';
+        if (s.flexDirection.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{flex-direction:' + s.flexDirection.mobile + '}';
+        if (s.justifyContent.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{justify-content:' + s.justifyContent.tablet + '}';
+        if (s.justifyContent.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{justify-content:' + s.justifyContent.mobile + '}';
+        if (s.alignItems.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{align-items:' + s.alignItems.tablet + '}';
+        if (s.alignItems.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{align-items:' + s.alignItems.mobile + '}';
+        collectRules(node.children, acc);
+      }
     });
-    var css = base;
-    if (tablet) css += '@media (max-width:1024px){' + tablet + '}';
-    if (mobile) css += '@media (max-width:767px){' + mobile + '}';
+  }
+  function buildResponsiveCss(layout) {
+    var acc = { base: '', tablet: '', mobile: '' };
+    collectRules(layout, acc);
+    var css = acc.base;
+    if (acc.tablet) css += '@media (max-width:1024px){' + acc.tablet + '}';
+    if (acc.mobile) css += '@media (max-width:767px){' + acc.mobile + '}';
     return css;
   }
 
-  function renderLayoutHtml(layout) {
-    return layout.map(function (section) {
-      var hasVideo = section.settings.background.desktop.type === 'video' && section.settings.background.desktop.video.url;
-      var inner = section.children.map(function (item) {
-        var attr = ' data-mvl-uid="' + item.id + '"';
-        var itemHasVideo = item.settings.background.desktop.type === 'video' && item.settings.background.desktop.video.url;
-        var content = '';
-        if (item.type === 'heading') { var tag = 'h' + (item.data.level || 2); content = '<' + tag + ' class="mvl-heading">' + esc(item.data.text) + '</' + tag + '>'; }
-        if (item.type === 'text') content = '<div class="mvl-text">' + autop(item.data.text) + '</div>';
-        if (item.type === 'button') content = '<p><a class="mvl-button" href="' + escAttr(item.data.url || '#') + '">' + esc(item.data.text) + '</a></p>';
-        if (item.type === 'image' && item.data.url) content = '<img class="mvl-image" src="' + escAttr(item.data.url) + '" alt="' + escAttr(item.data.alt) + '">';
-        var videoHtml = itemHasVideo ? '<div class="mvl-bg-video"><video autoplay muted loop playsinline src="' + escAttr(item.settings.background.desktop.video.url) + '"></video></div>' : '';
-        return '<div class="mvl-item mvl-item-' + item.type + ' mvl-bg-host' + (itemHasVideo ? ' mvl-has-video-bg' : '') + '"' + attr + '>' + videoHtml + content + '</div>';
-      }).join('');
-      var sectionVideo = hasVideo ? '<div class="mvl-bg-video"><video autoplay muted loop playsinline src="' + escAttr(section.settings.background.desktop.video.url) + '"></video></div>' : '';
-      var sectionTag = containerTags[section.settings.tag] ? section.settings.tag : 'section';
-      return '<' + sectionTag + ' class="mvl-section mvl-bg-host' + (hasVideo ? ' mvl-has-video-bg' : '') + '" data-mvl-uid="' + section.id + '">' + sectionVideo + '<div class="mvl-container" style="max-width:1140px;margin:0 auto">' + inner + '</div></' + sectionTag + '>';
-    }).join('');
+  function renderLeafHtml(item) {
+    var attr = ' data-mvl-uid="' + item.id + '"';
+    var itemHasVideo = item.settings.background.desktop.type === 'video' && item.settings.background.desktop.video.url;
+    var content = '';
+    if (item.type === 'heading') { var tag = 'h' + (item.data.level || 2); content = '<' + tag + ' class="mvl-heading">' + esc(item.data.text) + '</' + tag + '>'; }
+    if (item.type === 'text') content = '<div class="mvl-text">' + autop(item.data.text) + '</div>';
+    if (item.type === 'button') content = '<p><a class="mvl-button" href="' + escAttr(item.data.url || '#') + '">' + esc(item.data.text) + '</a></p>';
+    if (item.type === 'image' && item.data.url) content = '<img class="mvl-image" src="' + escAttr(item.data.url) + '" alt="' + escAttr(item.data.alt) + '">';
+    var videoHtml = itemHasVideo ? '<div class="mvl-bg-video"><video autoplay muted loop playsinline src="' + escAttr(item.settings.background.desktop.video.url) + '"></video></div>' : '';
+    return '<div class="mvl-item mvl-item-' + item.type + ' mvl-bg-host' + (itemHasVideo ? ' mvl-has-video-bg' : '') + '"' + attr + '>' + videoHtml + content + '</div>';
   }
+  function renderSectionHtml(section) {
+    var hasVideo = section.settings.background.desktop.type === 'video' && section.settings.background.desktop.video.url;
+    var inner = section.children.map(function (node) { return node.type === 'section' ? renderSectionHtml(node) : renderLeafHtml(node); }).join('');
+    var sectionVideo = hasVideo ? '<div class="mvl-bg-video"><video autoplay muted loop playsinline src="' + escAttr(section.settings.background.desktop.video.url) + '"></video></div>' : '';
+    var sectionTag = containerTags[section.settings.tag] ? section.settings.tag : 'section';
+    return '<' + sectionTag + ' class="mvl-section mvl-bg-host' + (hasVideo ? ' mvl-has-video-bg' : '') + '" data-mvl-uid="' + section.id + '">' + sectionVideo + '<div class="mvl-container" style="max-width:1140px;margin:0 auto">' + inner + '</div></' + sectionTag + '>';
+  }
+  function renderLayoutHtml(layout) { return layout.map(renderSectionHtml).join(''); }
 
   function ensureSelectionStyle(doc) {
     if (doc.getElementById('mvl-live-style')) return;
