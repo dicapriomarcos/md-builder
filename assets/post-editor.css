@@ -1,0 +1,19 @@
+body.mvl-managed-editor #postdivrich,
+body.mvl-managed-editor #elementor-switch-mode,
+body.mvl-managed-editor #elementor-editor {
+	display: none !important;
+}
+
+.mvl-content-cta {
+	margin: 20px 0;
+	padding: 24px;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-left: 4px solid #2271b1;
+	border-radius: 2px;
+}
+
+.mvl-content-cta p {
+	margin-top: 0;
+	font-size: 14px;
+}

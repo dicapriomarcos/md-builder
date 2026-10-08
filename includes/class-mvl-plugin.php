@@ -13,6 +13,8 @@ final class MVL_Plugin {
 		add_action( 'admin_menu', array( self::class, 'add_builder_page' ) );
 		add_action( 'add_meta_boxes', array( self::class, 'add_builder_link' ), 10, 2 );
 		add_action( 'edit_form_after_title', array( self::class, 'render_content_cta' ) );
+		add_action( 'load-post.php', array( self::class, 'configure_post_editor' ) );
+		add_filter( 'use_block_editor_for_post', array( self::class, 'filter_block_editor' ), 10, 2 );
 		add_action( 'admin_enqueue_scripts', array( self::class, 'enqueue_admin_assets' ) );
 		add_filter( 'admin_body_class', array( self::class, 'filter_admin_body_class' ) );
 		add_action( 'rest_api_init', array( self::class, 'register_routes' ) );
@@ -64,7 +66,28 @@ final class MVL_Plugin {
 		if ( ! in_array( $post_type, array( 'page', 'post' ), true ) || ! current_user_can( 'edit_post', $post->ID ) ) {
 			return;
 		}
+		if ( self::is_builder_post( $post ) ) {
+			return;
+		}
 		add_meta_box( 'mvl-open-builder', 'Maquetador visual', array( self::class, 'render_builder_link' ), $post_type, 'side', 'high', array( 'post_id' => $post->ID ) );
+	}
+
+	private static function is_builder_post( WP_Post $post ): bool {
+		return in_array( $post->post_type, array( 'page', 'post' ), true )
+			&& str_contains( $post->post_content, '<!-- mvl:document' );
+	}
+
+	/** Oculta el editor solo en esta petición y conserva el contenido al actualizar. */
+	public static function configure_post_editor(): void {
+		$post_id = isset( $_GET['post'] ) ? absint( wp_unslash( $_GET['post'] ) ) : 0;
+		$post    = get_post( $post_id );
+		if ( $post instanceof WP_Post && self::is_builder_post( $post ) && current_user_can( 'edit_post', $post_id ) ) {
+			remove_post_type_support( $post->post_type, 'editor' );
+		}
+	}
+
+	public static function filter_block_editor( bool $use_block_editor, WP_Post $post ): bool {
+		return self::is_builder_post( $post ) ? false : $use_block_editor;
 	}
 
 	public static function render_builder_link( WP_Post $post, array $box ): void {
@@ -82,20 +105,23 @@ final class MVL_Plugin {
 		if ( ! in_array( $post->post_type, array( 'page', 'post' ), true ) || ! current_user_can( 'edit_post', $post->ID ) ) {
 			return;
 		}
-		if ( ! str_contains( $post->post_content, '<!-- mvl:document' ) ) {
+		if ( ! self::is_builder_post( $post ) ) {
 			return;
 		}
 		$url = add_query_arg( array( 'page' => 'mvl-builder', 'post_id' => $post->ID ), admin_url( 'admin.php' ) );
 		echo '<div class="mvl-content-cta">'
-			. '<p>' . esc_html__( 'Esta página está maquetada con el Maquetador Visual Ligero. Para no romper el diseño, editala siempre desde ahí.', 'maquetador-visual-ligero' ) . '</p>'
-			. '<a class="button button-primary button-hero" href="' . esc_url( $url ) . '">' . esc_html__( 'Editar con el Maquetador Visual', 'maquetador-visual-ligero' ) . '</a>'
-			. '</div>'
-			. '<style>.mvl-content-cta{margin:20px 0;padding:20px;background:#fff;border:1px solid #dcdcde;border-left:4px solid #2271b1;border-radius:2px}.mvl-content-cta p{margin-top:0;font-size:14px}</style>';
+			. '<p>' . esc_html__( 'Este contenido está diseñado con el Maquetador Visual Ligero.', 'maquetador-visual-ligero' ) . '</p>'
+			. '<a class="button button-primary button-hero" href="' . esc_url( $url ) . '">' . esc_html__( 'Maquetar con el Maquetador', 'maquetador-visual-ligero' ) . '</a>'
+			. '</div>';
 	}
 
 	public static function filter_admin_body_class( string $classes ): string {
 		if ( isset( $_GET['page'] ) && 'mvl-builder' === $_GET['page'] ) {
 			$classes .= ' mvl-fullscreen';
+		}
+		global $post;
+		if ( $post instanceof WP_Post && self::is_builder_post( $post ) ) {
+			$classes .= ' mvl-managed-editor';
 		}
 		return $classes;
 	}
@@ -110,6 +136,14 @@ final class MVL_Plugin {
 	}
 
 	public static function enqueue_admin_assets( string $hook ): void {
+		if ( 'post.php' === $hook ) {
+			$post_id = isset( $_GET['post'] ) ? absint( wp_unslash( $_GET['post'] ) ) : 0;
+			$post    = get_post( $post_id );
+			if ( $post instanceof WP_Post && self::is_builder_post( $post ) && current_user_can( 'edit_post', $post_id ) ) {
+				wp_enqueue_style( 'mvl-post-editor', plugins_url( 'assets/post-editor.css', self::$plugin_file ), array(), self::asset_version( 'assets/post-editor.css' ) );
+				wp_enqueue_style( 'mvl-admin-theme', plugins_url( 'assets/admin-theme.css', self::$plugin_file ), array( 'mvl-post-editor' ), self::asset_version( 'assets/admin-theme.css' ) );
+			}
+		}
 		if ( 'toplevel_page_mvl-builder' !== $hook ) {
 			return;
 		}
@@ -119,6 +153,7 @@ final class MVL_Plugin {
 		}
 		wp_enqueue_media();
 		wp_enqueue_style( 'mvl-builder', plugins_url( 'assets/builder.css', self::$plugin_file ), array( 'dashicons' ), self::asset_version( 'assets/builder.css' ) );
+		wp_enqueue_style( 'mvl-admin-theme', plugins_url( 'assets/admin-theme.css', self::$plugin_file ), array( 'mvl-builder' ), self::asset_version( 'assets/admin-theme.css' ) );
 		wp_enqueue_script( 'mvl-builder', plugins_url( 'assets/builder.js', self::$plugin_file ), array( 'media-editor' ), self::asset_version( 'assets/builder.js' ), true );
 		$linkable_post_types = array();
 		foreach ( self::linkable_post_types() as $slug => $label ) {
@@ -458,7 +493,7 @@ final class MVL_Plugin {
 	public static function save_layout_route( WP_REST_Request $request ): WP_REST_Response {
 		$post_id = (int) $request['id'];
 		$layout  = self::sanitize_layout( $request->get_param( 'layout' ) );
-		$result  = wp_update_post( array( 'ID' => $post_id, 'post_content' => self::serialize_layout( $layout, $post_id ) ), true );
+		$result  = wp_update_post( wp_slash( array( 'ID' => $post_id, 'post_content' => self::serialize_layout( $layout, $post_id ) ) ), true );
 		if ( is_wp_error( $result ) ) {
 			return new WP_REST_Response( array( 'message' => $result->get_error_message() ), 500 );
 		}
@@ -730,19 +765,21 @@ final class MVL_Plugin {
 	}
 
 	/**
-	 * Normaliza un valor de ajuste a la forma responsive {desktop, tablet, mobile},
+	 * Normaliza un valor de ajuste a la forma responsive {desktop, laptop, tablet, mobile},
 	 * aceptando también el formato antiguo (valor plano) para compatibilidad.
 	 */
 	private static function sanitize_responsive( $raw, callable $sanitizer, $default ) {
 		if ( is_array( $raw ) && array_key_exists( 'desktop', $raw ) ) {
 			return array(
 				'desktop' => call_user_func( $sanitizer, $raw['desktop'] ?? $default ),
+				'laptop'  => isset( $raw['laptop'] ) && null !== $raw['laptop'] ? call_user_func( $sanitizer, $raw['laptop'] ) : null,
 				'tablet'  => isset( $raw['tablet'] ) && null !== $raw['tablet'] ? call_user_func( $sanitizer, $raw['tablet'] ) : null,
 				'mobile'  => isset( $raw['mobile'] ) && null !== $raw['mobile'] ? call_user_func( $sanitizer, $raw['mobile'] ) : null,
 			);
 		}
 		return array(
 			'desktop' => call_user_func( $sanitizer, null !== $raw ? $raw : $default ),
+			'laptop'  => null,
 			'tablet'  => null,
 			'mobile'  => null,
 		);
@@ -839,16 +876,17 @@ final class MVL_Plugin {
 	}
 
 	/**
-	 * Construye las reglas CSS (base/tablet/mobile) de fondo + padding + margin
+	 * Construye las reglas CSS (base/laptop/tablet/mobile) de fondo + padding + margin
 	 * para un selector [data-mvl-uid], compartido entre secciones e items.
 	 *
-	 * @return array{0:string,1:string,2:string}
+	 * @return array{0:string,1:string,2:string,3:string}
 	 */
 	private static function build_style_block( string $selector, array $settings ): array {
 		$base   = $selector . '{' . self::background_css( $settings['background']['desktop'] ) . self::border_css( $settings['border']['desktop'] ) . 'padding:' . self::spacing_css( $settings['padding']['desktop'] ) . '!important;margin:' . self::spacing_css( $settings['margin']['desktop'] ) . '!important;}';
+		$laptop = '';
 		$tablet = '';
 		$mobile = '';
-		foreach ( array( 'tablet', 'mobile' ) as $device ) {
+		foreach ( array( 'laptop', 'tablet', 'mobile' ) as $device ) {
 			$bg   = $settings['background'][ $device ];
 			$bd   = $settings['border'][ $device ];
 			$pad  = $settings['padding'][ $device ];
@@ -873,13 +911,15 @@ final class MVL_Plugin {
 				continue;
 			}
 			$rule = $selector . '{' . $decl . '}';
-			if ( 'tablet' === $device ) {
+			if ( 'laptop' === $device ) {
+				$laptop .= $rule;
+			} elseif ( 'tablet' === $device ) {
 				$tablet .= $rule;
 			} else {
 				$mobile .= $rule;
 			}
 		}
-		return array( $base, $tablet, $mobile );
+		return array( $base, $laptop, $tablet, $mobile );
 	}
 
 	private static function serialize_layout( array $layout, int $post_id ): string {
@@ -893,14 +933,15 @@ final class MVL_Plugin {
 
 	/**
 	 * Recorre recursivamente secciones e items (un contenedor puede tener otros
-	 * contenedores anidados como hijos) juntando las reglas CSS base/tablet/mobile
+	 * contenedores anidados como hijos) juntando las reglas CSS base/laptop/tablet/mobile
 	 * de cada uno en $rules, por referencia.
 	 */
 	private static function collect_style_rules( array $nodes, array &$rules ): void {
 		foreach ( $nodes as $node ) {
 			$uid = esc_attr( $node['id'] );
-			list( $base, $tablet, $mobile ) = self::build_style_block( '[data-mvl-uid="' . $uid . '"]', $node['settings'] );
+			list( $base, $laptop, $tablet, $mobile ) = self::build_style_block( '[data-mvl-uid="' . $uid . '"]', $node['settings'] );
 			$rules['base']   .= $base;
+			$rules['laptop'] .= $laptop;
 			$rules['tablet'] .= $tablet;
 			$rules['mobile'] .= $mobile;
 			$typo_selector = self::item_typography_selector( $uid, $node['type'] );
@@ -912,11 +953,17 @@ final class MVL_Plugin {
 				$is_grid    = 'grid' === $settings['display'];
 				$grid_decl  = $is_grid ? 'display:grid;grid-template-columns:' . self::grid_template_columns_css( $node['children'], (int) $settings['columns']['desktop'] ) . ';' : 'display:flex;flex-wrap:wrap;flex-direction:' . esc_attr( $settings['flexDirection']['desktop'] ) . ';justify-content:' . esc_attr( $settings['justifyContent']['desktop'] ) . ';align-items:' . esc_attr( $settings['alignItems']['desktop'] ) . ';';
 				$rules['base'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['desktop'] ) . ';gap:' . esc_attr( $settings['gap']['desktop'] ) . ';' . $grid_decl . '}';
+				if ( null !== $settings['textAlign']['laptop'] ) {
+					$rules['laptop'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['laptop'] ) . '}';
+				}
 				if ( null !== $settings['textAlign']['tablet'] ) {
 					$rules['tablet'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['tablet'] ) . '}';
 				}
 				if ( null !== $settings['textAlign']['mobile'] ) {
 					$rules['mobile'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{text-align:' . esc_attr( $settings['textAlign']['mobile'] ) . '}';
+				}
+				if ( null !== $settings['gap']['laptop'] ) {
+					$rules['laptop'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{gap:' . esc_attr( $settings['gap']['laptop'] ) . '}';
 				}
 				if ( null !== $settings['gap']['tablet'] ) {
 					$rules['tablet'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{gap:' . esc_attr( $settings['gap']['tablet'] ) . '}';
@@ -925,6 +972,9 @@ final class MVL_Plugin {
 					$rules['mobile'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{gap:' . esc_attr( $settings['gap']['mobile'] ) . '}';
 				}
 				if ( $is_grid ) {
+					if ( null !== $settings['columns']['laptop'] ) {
+						$rules['laptop'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{grid-template-columns:' . self::grid_template_columns_css( $node['children'], (int) $settings['columns']['laptop'] ) . '}';
+					}
 					if ( null !== $settings['columns']['tablet'] ) {
 						$rules['tablet'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{grid-template-columns:' . self::grid_template_columns_css( $node['children'], (int) $settings['columns']['tablet'] ) . '}';
 					}
@@ -932,17 +982,26 @@ final class MVL_Plugin {
 						$rules['mobile'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{grid-template-columns:' . self::grid_template_columns_css( $node['children'], (int) $settings['columns']['mobile'] ) . '}';
 					}
 				} else {
+					if ( null !== $settings['flexDirection']['laptop'] ) {
+						$rules['laptop'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{flex-direction:' . esc_attr( $settings['flexDirection']['laptop'] ) . '}';
+					}
 					if ( null !== $settings['flexDirection']['tablet'] ) {
 						$rules['tablet'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{flex-direction:' . esc_attr( $settings['flexDirection']['tablet'] ) . '}';
 					}
 					if ( null !== $settings['flexDirection']['mobile'] ) {
 						$rules['mobile'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{flex-direction:' . esc_attr( $settings['flexDirection']['mobile'] ) . '}';
 					}
+					if ( null !== $settings['justifyContent']['laptop'] ) {
+						$rules['laptop'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{justify-content:' . esc_attr( $settings['justifyContent']['laptop'] ) . '}';
+					}
 					if ( null !== $settings['justifyContent']['tablet'] ) {
 						$rules['tablet'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{justify-content:' . esc_attr( $settings['justifyContent']['tablet'] ) . '}';
 					}
 					if ( null !== $settings['justifyContent']['mobile'] ) {
 						$rules['mobile'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{justify-content:' . esc_attr( $settings['justifyContent']['mobile'] ) . '}';
+					}
+					if ( null !== $settings['alignItems']['laptop'] ) {
+						$rules['laptop'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{align-items:' . esc_attr( $settings['alignItems']['laptop'] ) . '}';
 					}
 					if ( null !== $settings['alignItems']['tablet'] ) {
 						$rules['tablet'] .= '[data-mvl-uid="' . $uid . '"] > .mvl-container{align-items:' . esc_attr( $settings['alignItems']['tablet'] ) . '}';
@@ -1002,9 +1061,12 @@ final class MVL_Plugin {
 	}
 
 	private static function render_layout( array $layout, int $post_id ): string {
-		$rules = array( 'base' => '', 'tablet' => '', 'mobile' => '' );
+		$rules = array( 'base' => '', 'laptop' => '', 'tablet' => '', 'mobile' => '' );
 		self::collect_style_rules( $layout, $rules );
 		$style = '<style>' . $rules['base'];
+		if ( $rules['laptop'] ) {
+			$style .= '@media (max-width:1366px){' . $rules['laptop'] . '}';
+		}
 		if ( $rules['tablet'] ) {
 			$style .= '@media (max-width:1024px){' . $rules['tablet'] . '}';
 		}

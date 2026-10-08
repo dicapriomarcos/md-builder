@@ -264,20 +264,21 @@ gap...) se guarda envuelto así, para poder tener un valor distinto por disposit
 ```jsonc
 {
   "desktop": T,        // obligatorio, es el valor base/fallback
-  "tablet":  T | null, // null = "hereda de desktop"
-  "mobile":  T | null  // null = "hereda de tablet, o de desktop si tablet también es null"
+  "laptop":  T | null, // null = "hereda de desktop"
+  "tablet":  T | null, // null = "hereda de laptop o desktop"
+  "mobile":  T | null  // null = "hereda de tablet, laptop o desktop"
 }
 ```
 
 Reglas para la IA:
 
 - **Siempre** hay que rellenar `desktop`. Es el único obligatorio.
-- Dejar `tablet`/`mobile` en `null` a menos que el usuario pida explícitamente un
+- Dejar `laptop`/`tablet`/`mobile` en `null` a menos que el usuario pida explícitamente un
   comportamiento distinto en esos anchos.
-- Los breakpoints del CSS generado son: tablet `max-width:1024px`, mobile
+- Los breakpoints del CSS generado son: laptop `max-width:1366px`, tablet `max-width:1024px`, mobile
   `max-width:767px`.
 - Formato viejo (compatibilidad): un valor plano sin envolver en `{desktop,...}`
-  también se acepta y se trata como si fuera solo `desktop` (tablet/mobile quedan en
+  también se acepta y se trata como si fuera solo `desktop` (laptop/tablet/mobile quedan en
   `null`). No es necesario usarlo, pero si se genera así no rompe nada.
 
 ### 4.2 `SpacingSide` (un solo lado: ancho de borde, radio, gap)
@@ -553,8 +554,8 @@ documento simplemente se ignora al sanitizar:
    corresponden (ver tablas arriba) — mejor generar el objeto completo que confiar
    en que "lo que falte se rellena bien", sobre todo en `padding`/`margin` (ver
    trampa de §4.3).
-3. Todo ajuste de estilo va envuelto en `{desktop, tablet, mobile}`, con
-   `tablet`/`mobile` en `null` salvo que se pida una diferencia real por
+3. Todo ajuste de estilo va envuelto en `{desktop, laptop, tablet, mobile}`, con
+   `laptop`/`tablet`/`mobile` en `null` salvo que se pida una diferencia real por
    dispositivo.
 4. No inventar campos fuera de este spec (`width`, `fontSize` suelto, `color` de
    texto suelto, etc. no existen y se ignoran — la tipografía va siempre dentro de
@@ -580,16 +581,16 @@ documento simplemente se ignora al sanitizar:
     "id": "hero",
     "type": "section",
     "settings": {
-      "background": { "desktop": { "type": "color", "color": "#1d2327" }, "tablet": null, "mobile": null },
-      "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "tablet": null, "mobile": null },
+      "background": { "desktop": { "type": "color", "color": "#1d2327" }, "laptop": null, "tablet": null, "mobile": null },
+      "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "laptop": null, "tablet": null, "mobile": null },
       "tag": "section",
-      "textAlign": { "desktop": "center", "tablet": null, "mobile": null },
-      "gap": { "desktop": "16px", "tablet": null, "mobile": null },
-      "flexDirection": { "desktop": "column", "tablet": null, "mobile": null },
-      "justifyContent": { "desktop": "center", "tablet": null, "mobile": null },
-      "alignItems": { "desktop": "center", "tablet": null, "mobile": null },
-      "padding": { "desktop": { "top": "96px", "right": "24px", "bottom": "96px", "left": "24px", "linked": false }, "tablet": null, "mobile": { "top": "48px", "right": "16px", "bottom": "48px", "left": "16px", "linked": false } },
-      "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }
+      "textAlign": { "desktop": "center", "laptop": null, "tablet": null, "mobile": null },
+      "gap": { "desktop": "16px", "laptop": null, "tablet": null, "mobile": null },
+      "flexDirection": { "desktop": "column", "laptop": null, "tablet": null, "mobile": null },
+      "justifyContent": { "desktop": "center", "laptop": null, "tablet": null, "mobile": null },
+      "alignItems": { "desktop": "center", "laptop": null, "tablet": null, "mobile": null },
+      "padding": { "desktop": { "top": "96px", "right": "24px", "bottom": "96px", "left": "24px", "linked": false }, "laptop": null, "tablet": null, "mobile": { "top": "48px", "right": "16px", "bottom": "48px", "left": "16px", "linked": false } },
+      "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null }
     },
     "children": [
       {
@@ -597,10 +598,10 @@ documento simplemente se ignora al sanitizar:
         "type": "heading",
         "data": { "text": "Bienvenido a Tres Tristes Tigres", "level": 1 },
         "settings": {
-          "background": { "desktop": { "type": "none" }, "tablet": null, "mobile": null },
-          "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "tablet": null, "mobile": null },
-          "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null },
-          "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }
+          "background": { "desktop": { "type": "none" }, "laptop": null, "tablet": null, "mobile": null },
+          "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "laptop": null, "tablet": null, "mobile": null },
+          "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null },
+          "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null }
         }
       },
       {
@@ -608,10 +609,10 @@ documento simplemente se ignora al sanitizar:
         "type": "text",
         "data": { "text": "Agencia de desarrollo web y estrategia digital." },
         "settings": {
-          "background": { "desktop": { "type": "none" }, "tablet": null, "mobile": null },
-          "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "tablet": null, "mobile": null },
-          "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null },
-          "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }
+          "background": { "desktop": { "type": "none" }, "laptop": null, "tablet": null, "mobile": null },
+          "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "laptop": null, "tablet": null, "mobile": null },
+          "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null },
+          "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null }
         }
       }
     ]
@@ -620,36 +621,36 @@ documento simplemente se ignora al sanitizar:
     "id": "columnas",
     "type": "section",
     "settings": {
-      "background": { "desktop": { "type": "color", "color": "#ffffff" }, "tablet": null, "mobile": null },
-      "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "tablet": null, "mobile": null },
+      "background": { "desktop": { "type": "color", "color": "#ffffff" }, "laptop": null, "tablet": null, "mobile": null },
+      "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "laptop": null, "tablet": null, "mobile": null },
       "tag": "section",
-      "textAlign": { "desktop": "left", "tablet": null, "mobile": null },
-      "gap": { "desktop": "32px", "tablet": null, "mobile": "16px" },
-      "flexDirection": { "desktop": "row", "tablet": null, "mobile": "column" },
-      "justifyContent": { "desktop": "space-between", "tablet": null, "mobile": null },
-      "alignItems": { "desktop": "flex-start", "tablet": null, "mobile": null },
-      "padding": { "desktop": { "top": "64px", "right": "24px", "bottom": "64px", "left": "24px", "linked": false }, "tablet": null, "mobile": null },
-      "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }
+      "textAlign": { "desktop": "left", "laptop": null, "tablet": null, "mobile": null },
+      "gap": { "desktop": "32px", "laptop": null, "tablet": null, "mobile": "16px" },
+      "flexDirection": { "desktop": "row", "laptop": null, "tablet": null, "mobile": "column" },
+      "justifyContent": { "desktop": "space-between", "laptop": null, "tablet": null, "mobile": null },
+      "alignItems": { "desktop": "flex-start", "laptop": null, "tablet": null, "mobile": null },
+      "padding": { "desktop": { "top": "64px", "right": "24px", "bottom": "64px", "left": "24px", "linked": false }, "laptop": null, "tablet": null, "mobile": null },
+      "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null }
     },
     "children": [
       {
         "id": "col-1",
         "type": "section",
         "settings": {
-          "background": { "desktop": { "type": "none" }, "tablet": null, "mobile": null },
-          "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "tablet": null, "mobile": null },
+          "background": { "desktop": { "type": "none" }, "laptop": null, "tablet": null, "mobile": null },
+          "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "laptop": null, "tablet": null, "mobile": null },
           "tag": "div",
-          "textAlign": { "desktop": "left", "tablet": null, "mobile": null },
-          "gap": { "desktop": "8px", "tablet": null, "mobile": null },
-          "flexDirection": { "desktop": "column", "tablet": null, "mobile": null },
-          "justifyContent": { "desktop": "flex-start", "tablet": null, "mobile": null },
-          "alignItems": { "desktop": "flex-start", "tablet": null, "mobile": null },
-          "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null },
-          "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }
+          "textAlign": { "desktop": "left", "laptop": null, "tablet": null, "mobile": null },
+          "gap": { "desktop": "8px", "laptop": null, "tablet": null, "mobile": null },
+          "flexDirection": { "desktop": "column", "laptop": null, "tablet": null, "mobile": null },
+          "justifyContent": { "desktop": "flex-start", "laptop": null, "tablet": null, "mobile": null },
+          "alignItems": { "desktop": "flex-start", "laptop": null, "tablet": null, "mobile": null },
+          "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null },
+          "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null }
         },
         "children": [
-          { "id": "col-1-titulo", "type": "heading", "data": { "text": "Diseño", "level": 3 }, "settings": { "background": { "desktop": { "type": "none" }, "tablet": null, "mobile": null }, "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "tablet": null, "mobile": null }, "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }, "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null } } },
-          { "id": "col-1-texto", "type": "text", "data": { "text": "Interfaces claras y a medida." }, "settings": { "background": { "desktop": { "type": "none" }, "tablet": null, "mobile": null }, "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "tablet": null, "mobile": null }, "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }, "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null } } }
+          { "id": "col-1-titulo", "type": "heading", "data": { "text": "Diseño", "level": 3 }, "settings": { "background": { "desktop": { "type": "none" }, "laptop": null, "tablet": null, "mobile": null }, "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "laptop": null, "tablet": null, "mobile": null }, "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null }, "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null } } },
+          { "id": "col-1-texto", "type": "text", "data": { "text": "Interfaces claras y a medida." }, "settings": { "background": { "desktop": { "type": "none" }, "laptop": null, "tablet": null, "mobile": null }, "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "laptop": null, "tablet": null, "mobile": null }, "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null }, "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null } } }
         ]
       }
     ]
@@ -658,19 +659,19 @@ documento simplemente se ignora al sanitizar:
     "id": "cta",
     "type": "section",
     "settings": {
-      "background": { "desktop": { "type": "gradient", "gradient": { "type": "linear", "angle": 120, "stops": [ { "color": "#2271b1", "pos": 0 }, { "color": "#135e96", "pos": 100 } ] } }, "tablet": null, "mobile": null },
-      "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "tablet": null, "mobile": null },
+      "background": { "desktop": { "type": "gradient", "gradient": { "type": "linear", "angle": 120, "stops": [ { "color": "#2271b1", "pos": 0 }, { "color": "#135e96", "pos": 100 } ] } }, "laptop": null, "tablet": null, "mobile": null },
+      "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "laptop": null, "tablet": null, "mobile": null },
       "tag": "section",
-      "textAlign": { "desktop": "center", "tablet": null, "mobile": null },
-      "gap": { "desktop": "16px", "tablet": null, "mobile": null },
-      "flexDirection": { "desktop": "column", "tablet": null, "mobile": null },
-      "justifyContent": { "desktop": "center", "tablet": null, "mobile": null },
-      "alignItems": { "desktop": "center", "tablet": null, "mobile": null },
-      "padding": { "desktop": { "top": "64px", "right": "24px", "bottom": "64px", "left": "24px", "linked": false }, "tablet": null, "mobile": null },
-      "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }
+      "textAlign": { "desktop": "center", "laptop": null, "tablet": null, "mobile": null },
+      "gap": { "desktop": "16px", "laptop": null, "tablet": null, "mobile": null },
+      "flexDirection": { "desktop": "column", "laptop": null, "tablet": null, "mobile": null },
+      "justifyContent": { "desktop": "center", "laptop": null, "tablet": null, "mobile": null },
+      "alignItems": { "desktop": "center", "laptop": null, "tablet": null, "mobile": null },
+      "padding": { "desktop": { "top": "64px", "right": "24px", "bottom": "64px", "left": "24px", "linked": false }, "laptop": null, "tablet": null, "mobile": null },
+      "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null }
     },
     "children": [
-      { "id": "cta-boton", "type": "button", "data": { "text": "Hablemos de tu proyecto", "textTag": "", "url": "/contacto", "urlTag": "", "urlPostId": 0 }, "settings": { "background": { "desktop": { "type": "none" }, "tablet": null, "mobile": null }, "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "tablet": null, "mobile": null }, "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null }, "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "tablet": null, "mobile": null } } }
+      { "id": "cta-boton", "type": "button", "data": { "text": "Hablemos de tu proyecto", "textTag": "", "url": "/contacto", "urlTag": "", "urlPostId": 0 }, "settings": { "background": { "desktop": { "type": "none" }, "laptop": null, "tablet": null, "mobile": null }, "border": { "desktop": { "style": "none", "width": "1px", "color": "#000000", "radius": "0px" }, "laptop": null, "tablet": null, "mobile": null }, "padding": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null }, "margin": { "desktop": { "top": "0px", "right": "0px", "bottom": "0px", "left": "0px", "linked": false }, "laptop": null, "tablet": null, "mobile": null } } }
     ]
   }
 ]
@@ -780,19 +781,6 @@ no falla ni deja de renderizarse.
 
 ---
 
-## Pendiente / próximas secciones de este spec
+## Pendientes SDD
 
-- [ ] Prompt de sistema listo para pegar en una IA (rol + reglas + este spec resumido)
-- [ ] Few-shots adicionales (galería de imágenes, testimonios, precios, ejemplo con
-      `display:"grid"` y con Variables/`buttonStyle`)
-- [ ] Definir un mini-lenguaje o wrapper de "recetas" (ítems de negocio → JSON) si se
-      decide construir eso
-- [x] ~~Agregar `width`/`flex-basis` por hijo para columnas reales~~ — resuelto con
-      `Section.settings.display:"grid"` + `columns` + `width` (`GridWidth`) por
-      hijo para anchos variables (§2, §8.1)
-- [ ] Endpoint REST propio para el catálogo de Google Fonts (`fontCatalog`, hoy solo
-      viaja embebido en `window.MVL` del editor, no hay forma de consultarlo desde
-      fuera de wp-admin) — ver §11.1.1
-- [ ] `line-height`, `letter-spacing` y color de texto en `Typography` (§4.6)
-- [ ] Hacer `Typography`/`display`/`columns` responsive (hoy `columns` es el único
-      `ResponsiveValue` de los nuevos campos, ver §8.9)
+El inventario actualizado está en [SPEC-002 · Mejoras pendientes](specs/SPEC-002-mejoras-pendientes.md). Las columnas responsive y el ancho por hijo Grid ya están implementados. Laptop está documentado en [SPEC-001](specs/SPEC-001-responsive-laptop.md).

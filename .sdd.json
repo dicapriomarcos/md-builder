@@ -1,0 +1,14 @@
+{
+  "format": "sdd-hub/1",
+  "name": "maquetador-visual-ligero",
+  "lang": "es",
+  "specsDir": "docs/specs",
+  "sddDoc": "docs/design/sistema/index.md",
+  "idPrefix": "SPEC",
+  "dirs": {
+    "feature": "docs/specs",
+    "design": "docs/design",
+    "architecture": "docs/architecture",
+    "fix": "docs/fixes"
+  }
+}

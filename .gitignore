@@ -1,0 +1,8 @@
+# Archivos locales y datos que no forman parte del plugin.
+.claude/settings.local.json
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.sql

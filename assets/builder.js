@@ -4,7 +4,7 @@
   var labels = { section: 'Contenedor', heading: 'Título', text: 'Texto', button: 'Botón', image: 'Imagen' };
   var containerTags = { div: 'div', section: 'section', article: 'article' };
   var icons = { section: 'dashicons-align-wide', heading: 'dashicons-heading', text: 'dashicons-text-page', button: 'dashicons-button', image: 'dashicons-format-image' };
-  var deviceLabels = { desktop: 'Escritorio', tablet: 'Tablet', mobile: 'Móvil' };
+  var deviceLabels = { desktop: 'Escritorio', laptop: 'Laptop', tablet: 'Tablet', mobile: 'Móvil' };
   var sideLabels = { top: 'Arriba', right: 'Derecha', bottom: 'Abajo', left: 'Izquierda' };
   var tabLabels = { content: 'Contenido', style: 'Estilo', advanced: 'Avanzado' };
   var fontVariantLabels = { regular: 'Normal', italic: 'Cursiva', bold: 'Negrita', bolditalic: 'Negrita cursiva' };
@@ -59,6 +59,7 @@
   function markDirtyLite() {
     state.dirty = true;
     refs.status.textContent = 'Cambios sin guardar';
+    refs.status.classList.add('is-dirty');
     refreshPreview();
   }
   /** Igual que markDirty()/markDirtyLite() pero para las Variables globales (tipografía, fuentes, estilos de botón), que se guardan aparte del layout. */
@@ -69,7 +70,7 @@
   function markVariablesDirtyLite() {
     state.variablesDirty = true;
     var status = root.querySelector('.mvl-variables-status');
-    if (status) status.textContent = 'Cambios sin guardar';
+    if (status) { status.textContent = 'Cambios sin guardar'; status.classList.add('is-dirty'); }
     refreshPreview();
   }
 
@@ -137,10 +138,13 @@
     return loc.node.type === 'section' ? loc.node : loc.parentSection;
   }
 
-  function respDefault(value) { return { desktop: value, tablet: null, mobile: null }; }
+  function respDefault(value) { return { desktop: value, laptop: null, tablet: null, mobile: null }; }
   function respGet(resp, device) {
-    if (device === 'mobile') return resp.mobile != null ? resp.mobile : (resp.tablet != null ? resp.tablet : resp.desktop);
-    if (device === 'tablet') return resp.tablet != null ? resp.tablet : resp.desktop;
+    var devices = ['desktop', 'laptop', 'tablet', 'mobile'];
+    var index = devices.indexOf(device);
+    for (; index >= 0; index--) {
+      if (resp[devices[index]] != null) return resp[devices[index]];
+    }
     return resp.desktop;
   }
   function respHasOverride(resp, device) { return device !== 'desktop' && resp[device] != null; }
@@ -392,7 +396,7 @@
   }
 
   function contentPanel(item) {
-    var html = '<p class="mvl-type">' + labels[item.type] + '</p>';
+    var html = '';
     if (item.type === 'section') {
       var tag = item.settings.tag || 'section';
       html += '<label>Elemento HTML<select data-setting="tag">' + Object.keys(containerTags).map(function (t) { return '<option value="' + t + '" ' + (tag === t ? 'selected' : '') + '>&lt;' + t + '&gt;</option>'; }).join('') + '</select></label>';
@@ -510,10 +514,13 @@
   }
 
   function inspector(item) {
-    if (!item) return '<div class="mvl-empty">Selecciona un bloque para editarlo.</div>';
+    if (!item) return '<div class="mvl-inspector-heading"><span class="mvl-eyebrow">Tu espacio de edición</span><h2>Ajustes del bloque</h2></div><div class="mvl-empty-state"><span class="dashicons dashicons-edit" aria-hidden="true"></span><h3>Selecciona un bloque</h3><p>Haz clic en la vista previa o elige un bloque en Estructura para ver sus opciones.</p></div>';
     var tabs = tabsFor(item);
     if (tabs.indexOf(state.tab) === -1) state.tab = tabs[0];
-    var html = '<div class="mvl-tabs">' + tabs.map(function (t) { return '<button class="mvl-tab' + (state.tab === t ? ' is-active' : '') + '" data-tab="' + t + '">' + tabLabels[t] + '</button>'; }).join('') + '</div>';
+    var summary = item.type === 'section' ? (item.settings.htmlId || 'Organiza los bloques de esta sección') : (item.data.text || item.data.alt || 'Configura este bloque');
+    summary = summary.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    var html = '<div class="mvl-inspector-heading"><div class="mvl-block-heading"><span class="mvl-block-icon dashicons ' + icons[item.type] + '" aria-hidden="true"></span><div><span class="mvl-eyebrow">Editar bloque</span><h2>' + esc(labels[item.type]) + '</h2></div></div><p class="mvl-block-summary" title="' + escAttr(summary) + '">' + esc(summary.slice(0, 90)) + '</p></div>';
+    html += '<div class="mvl-tabs">' + tabs.map(function (t) { return '<button class="mvl-tab' + (state.tab === t ? ' is-active' : '') + '" data-tab="' + t + '" aria-pressed="' + (state.tab === t) + '">' + tabLabels[t] + '</button>'; }).join('') + '</div>';
     html += '<div class="mvl-tab-panel">';
     if (state.tab === 'content') html += contentPanel(item);
     if (state.tab === 'style') html += stylePanel(item);
@@ -992,23 +999,24 @@
   function buildSkeleton() {
     root.innerHTML =
       '<header class="mvl-topbar">'
-      + '<button class="mvl-toggle-left" data-action="toggle-left" title="Mostrar/ocultar bloques">☰</button>'
-      + '<strong>' + esc(MVL.postTitle) + '</strong>'
+      + '<button class="mvl-toggle-left" data-action="toggle-left" title="Mostrar/ocultar bloques" aria-label="Mostrar u ocultar bloques"><span class="dashicons dashicons-menu-alt" aria-hidden="true"></span></button>'
+      + '<div class="mvl-brand"><span class="mvl-brand-mark" aria-hidden="true">ML</span><div><span class="mvl-brand-label">Maquetador Ligero</span><strong class="mvl-page-title" title="' + escAttr(MVL.postTitle) + '">' + esc(MVL.postTitle) + '</strong></div></div>'
       + '<div class="mvl-devices">'
-      + '<button class="mvl-device is-active" data-device="desktop" title="Escritorio">🖥</button>'
-      + '<button class="mvl-device" data-device="tablet" title="Tablet">📱</button>'
-      + '<button class="mvl-device" data-device="mobile" title="Móvil">📲</button>'
+      + '<button class="mvl-device is-active" data-device="desktop" title="Escritorio" aria-label="Escritorio"><span class="dashicons dashicons-desktop" aria-hidden="true"></span></button>'
+      + '<button class="mvl-device" data-device="laptop" title="Laptop" aria-label="Laptop"><span class="dashicons dashicons-laptop" aria-hidden="true"></span></button>'
+      + '<button class="mvl-device" data-device="tablet" title="Tablet" aria-label="Tablet"><span class="dashicons dashicons-tablet" aria-hidden="true"></span></button>'
+      + '<button class="mvl-device" data-device="mobile" title="Móvil" aria-label="Móvil"><span class="dashicons dashicons-smartphone" aria-hidden="true"></span></button>'
       + '</div>'
       + '<button class="mvl-toggle-structure" data-action="toggle-structure" title="Estructura">Estructura</button>'
       + '<button class="mvl-toggle-variables" data-action="toggle-variables" title="Variables globales de tipografía y fuentes">Variables</button>'
       + '<button class="mvl-toggle-fullscreen" data-action="toggle-fullscreen" title="Ver a ancho completo">⛶ Ancho completo</button>'
-      + '<span class="mvl-status"></span>'
+      + '<span class="mvl-status" role="status" aria-live="polite"></span>'
       + '<button class="button button-primary" data-action="save">Guardar</button>'
       + '</header>'
       + '<main class="mvl-shell">'
       + '<aside class="mvl-left"><h2>Bloques</h2><div class="mvl-add">' + Object.keys(labels).map(function (type) { return '<button class="mvl-add-block" data-add="' + type + '"><span class="dashicons ' + icons[type] + '"></span><span class="mvl-add-label">' + labels[type] + '</span></button>'; }).join('') + '</div></aside>'
       + '<section class="mvl-canvas"><div class="mvl-canvas-frame"></div></section>'
-      + '<aside class="mvl-right"><h2>Ajustes</h2><div class="mvl-inspector"></div><div class="mvl-actions"><button class="button" data-action="up">Subir</button><button class="button" data-action="down">Bajar</button><button class="button-link-delete" data-action="delete">Eliminar</button></div></aside>'
+      + '<aside class="mvl-right"><div class="mvl-inspector"></div><div class="mvl-actions"><button class="button" data-action="up">Subir</button><button class="button" data-action="down">Bajar</button><button class="button-link-delete" data-action="delete">Eliminar</button></div></aside>'
       + '</main>';
 
     refs.shell = root.querySelector('.mvl-shell');
@@ -1017,6 +1025,7 @@
     refs.toggleVariablesBtn = root.querySelector('[data-action="toggle-variables"]');
     refs.toggleFullscreenBtn = root.querySelector('[data-action="toggle-fullscreen"]');
     refs.inspector = root.querySelector('.mvl-inspector');
+    refs.rightPanel = root.querySelector('.mvl-right');
     refs.canvasFrame = root.querySelector('.mvl-canvas-frame');
     refs.devices = root.querySelectorAll('[data-device]');
 
@@ -1034,7 +1043,7 @@
         if (b.dataset.action === 'up') move(-1);
         if (b.dataset.action === 'down') move(1);
         if (b.dataset.action === 'toggle-left') { state.leftCollapsed = !state.leftCollapsed; update(); }
-        if (b.dataset.action === 'toggle-structure') { state.showStructure = !state.showStructure; update(); }
+        if (b.dataset.action === 'toggle-structure') { state.showStructure = !state.showStructure; update(); refs.rightPanel.scrollTop = 0; }
         if (b.dataset.action === 'toggle-variables') { state.showVariables = !state.showVariables; update(); }
         if (b.dataset.action === 'toggle-fullscreen') { toggleFullscreen(); }
       };
@@ -1050,22 +1059,28 @@
   function update() {
     refs.shell.classList.toggle('is-left-collapsed', state.leftCollapsed);
     refs.status.textContent = state.dirty ? 'Cambios sin guardar' : 'Guardado';
+    refs.status.classList.toggle('is-dirty', state.dirty);
     refs.toggleStructureBtn.classList.toggle('is-active', state.showStructure);
+    refs.toggleStructureBtn.setAttribute('aria-expanded', String(state.showStructure));
+    refs.toggleStructureBtn.setAttribute('aria-controls', 'mvl-structure-panel');
     refs.toggleVariablesBtn.classList.toggle('is-active', state.showVariables);
     refs.toggleFullscreenBtn.classList.toggle('is-active', state.fullscreen);
     refs.shell.classList.toggle('mvl-focus-mode', state.fullscreen);
+    refs.shell.classList.toggle('is-structure-visible', state.showStructure);
     refs.canvasFrame.className = 'mvl-canvas-frame' + (state.device && state.device !== 'desktop' ? ' is-' + state.device : '');
-    refs.devices.forEach(function (b) { b.classList.toggle('is-active', (state.device || 'desktop') === b.dataset.device); });
+    refs.devices.forEach(function (b) { var active = (state.device || 'desktop') === b.dataset.device; b.classList.toggle('is-active', active); b.setAttribute('aria-pressed', String(active)); });
 
     refs.inspector.innerHTML = inspector(selectedItem());
+    refs.inspector.hidden = state.showStructure;
+    root.querySelector('.mvl-actions').hidden = state.showStructure || !selectedItem();
     bindDynamicEvents(refs.inspector);
 
     var existingPanel = root.querySelector('.mvl-structure-panel');
     if (state.showStructure) {
-      var panelHtml = '<div class="mvl-structure-panel"><h2>Estructura<button class="mvl-close" data-action="toggle-structure" title="Cerrar">×</button></h2><div class="mvl-tree">' + tree() + '</div></div>';
-      if (existingPanel) { existingPanel.outerHTML = panelHtml; } else { root.insertAdjacentHTML('beforeend', panelHtml); }
+      var panelHtml = '<div class="mvl-structure-panel" id="mvl-structure-panel"><h2>Estructura<button class="mvl-close" data-action="toggle-structure" title="Volver a edición" aria-label="Volver a edición">×</button></h2><div class="mvl-tree">' + tree() + '</div></div>';
+      if (existingPanel) { existingPanel.outerHTML = panelHtml; } else { refs.rightPanel.insertAdjacentHTML('beforeend', panelHtml); }
       var panel = root.querySelector('.mvl-structure-panel');
-      panel.querySelector('[data-action="toggle-structure"]').onclick = function () { state.showStructure = false; update(); };
+      panel.querySelector('[data-action="toggle-structure"]').onclick = function () { state.showStructure = false; update(); refs.rightPanel.scrollTop = 0; refs.toggleStructureBtn.focus(); };
       bindDynamicEvents(panel);
     } else if (existingPanel) {
       existingPanel.remove();
@@ -1160,8 +1175,8 @@
 
   function styleBlock(selector, settings) {
     var base = selector + '{' + backgroundCss(settings.background.desktop) + borderCss(settings.border.desktop) + 'padding:' + paddingCss(settings.padding.desktop) + '!important;margin:' + paddingCss(settings.margin.desktop) + '!important;}';
-    var tablet = '', mobile = '';
-    ['tablet', 'mobile'].forEach(function (device) {
+    var laptop = '', tablet = '', mobile = '';
+    ['laptop', 'tablet', 'mobile'].forEach(function (device) {
       var bg = settings.background[device], bd = settings.border[device], pad = settings.padding[device], mar = settings.margin[device];
       if (bg == null && bd == null && pad == null && mar == null) return;
       var decl = '';
@@ -1171,16 +1186,16 @@
       if (mar != null) decl += 'margin:' + paddingCss(mar) + '!important;';
       if (!decl) return;
       var rule = selector + '{' + decl + '}';
-      if (device === 'tablet') tablet += rule; else mobile += rule;
+      if (device === 'laptop') laptop += rule; else if (device === 'tablet') tablet += rule; else mobile += rule;
     });
-    return { base: base, tablet: tablet, mobile: mobile };
+    return { base: base, laptop: laptop, tablet: tablet, mobile: mobile };
   }
 
   function collectRules(list, acc) {
     list.forEach(function (node) {
       var uid = node.id;
       var r = styleBlock('[data-mvl-uid="' + uid + '"]', node.settings);
-      acc.base += r.base; acc.tablet += r.tablet; acc.mobile += r.mobile;
+      acc.base += r.base; acc.laptop += r.laptop; acc.tablet += r.tablet; acc.mobile += r.mobile;
       var typoSelector = itemTypographySelector(uid, node.type);
       if (typoSelector && node.settings.typography) acc.base += typographyCssJs(typoSelector, node.settings.typography);
       if (node.type === 'section') {
@@ -1190,18 +1205,24 @@
           ? 'display:grid;grid-template-columns:' + gridTemplateColumnsCss(node.children, respGet(s.columns, 'desktop')) + ';'
           : 'display:flex;flex-wrap:wrap;flex-direction:' + s.flexDirection.desktop + ';justify-content:' + s.justifyContent.desktop + ';align-items:' + s.alignItems.desktop + ';';
         acc.base += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + s.textAlign.desktop + ';gap:' + cssLength(s.gap.desktop) + ';' + gridDecl + '}';
+        if (s.textAlign.laptop != null) acc.laptop += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + s.textAlign.laptop + '}';
         if (s.textAlign.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + s.textAlign.tablet + '}';
         if (s.textAlign.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{text-align:' + s.textAlign.mobile + '}';
+        if (s.gap.laptop != null) acc.laptop += '[data-mvl-uid="' + uid + '"] > .mvl-container{gap:' + cssLength(s.gap.laptop) + '}';
         if (s.gap.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{gap:' + cssLength(s.gap.tablet) + '}';
         if (s.gap.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{gap:' + cssLength(s.gap.mobile) + '}';
         if (isGrid) {
+          if (s.columns.laptop != null) acc.laptop += '[data-mvl-uid="' + uid + '"] > .mvl-container{grid-template-columns:' + gridTemplateColumnsCss(node.children, s.columns.laptop) + '}';
           if (s.columns.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{grid-template-columns:' + gridTemplateColumnsCss(node.children, s.columns.tablet) + '}';
           if (s.columns.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{grid-template-columns:' + gridTemplateColumnsCss(node.children, s.columns.mobile) + '}';
         } else {
+          if (s.flexDirection.laptop != null) acc.laptop += '[data-mvl-uid="' + uid + '"] > .mvl-container{flex-direction:' + s.flexDirection.laptop + '}';
           if (s.flexDirection.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{flex-direction:' + s.flexDirection.tablet + '}';
           if (s.flexDirection.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{flex-direction:' + s.flexDirection.mobile + '}';
+          if (s.justifyContent.laptop != null) acc.laptop += '[data-mvl-uid="' + uid + '"] > .mvl-container{justify-content:' + s.justifyContent.laptop + '}';
           if (s.justifyContent.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{justify-content:' + s.justifyContent.tablet + '}';
           if (s.justifyContent.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{justify-content:' + s.justifyContent.mobile + '}';
+          if (s.alignItems.laptop != null) acc.laptop += '[data-mvl-uid="' + uid + '"] > .mvl-container{align-items:' + s.alignItems.laptop + '}';
           if (s.alignItems.tablet != null) acc.tablet += '[data-mvl-uid="' + uid + '"] > .mvl-container{align-items:' + s.alignItems.tablet + '}';
           if (s.alignItems.mobile != null) acc.mobile += '[data-mvl-uid="' + uid + '"] > .mvl-container{align-items:' + s.alignItems.mobile + '}';
         }
@@ -1210,9 +1231,10 @@
     });
   }
   function buildResponsiveCss(layout) {
-    var acc = { base: '', tablet: '', mobile: '' };
+    var acc = { base: '', laptop: '', tablet: '', mobile: '' };
     collectRules(layout, acc);
     var css = acc.base;
+    if (acc.laptop) css += '@media (max-width:1366px){' + acc.laptop + '}';
     if (acc.tablet) css += '@media (max-width:1024px){' + acc.tablet + '}';
     if (acc.mobile) css += '@media (max-width:767px){' + acc.mobile + '}';
     return css;
@@ -1258,7 +1280,8 @@
     if (doc.getElementById('mvl-live-style')) return;
     var style = doc.createElement('style');
     style.id = 'mvl-live-style';
-    style.textContent = '[data-mvl-uid]{cursor:pointer}.mvl-is-selected{outline:2px solid #2271b1!important;outline-offset:-2px}';
+    var accent = getComputedStyle(root).getPropertyValue('--mvl-accent').trim() || '#0f766e';
+    style.textContent = '[data-mvl-uid]{cursor:pointer}.mvl-is-selected{outline:2px solid ' + accent + '!important;outline-offset:-2px}';
     doc.head.appendChild(style);
   }
 
