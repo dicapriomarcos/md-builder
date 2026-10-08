@@ -20,7 +20,7 @@ La configuración de MD SDD Hub vive en .sdd.json. Las reglas de los agentes est
 | Usar los bloques existentes desde el maquetador | SPEC-004 y decisiones | Regla conservada |
 | Ocultar editor WordPress y mostrar botón | SPEC-005 | Implementado, awaiting-review |
 | Nombre sobre las opciones y renovación visual | SPEC-006, DES-001 y sistema | Implementado, documentado |
-| Añadir Laptop | SPEC-001 | Implementado, awaiting-review |
+| Añadir Laptop | SPEC-001 | done, cerrado por el usuario desde MD SDD Hub |
 | Estructura en lugar de edición y alternable | SPEC-003 | Primera fase implementada |
 | Propuesta visual del árbol | DES-002, SPEC-003 | Propuesta escrita; muestra visual pendiente |
 | Arrastrar entre contenedores, copiar y duplicar | SPEC-003 | Pendiente de implementar |

@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Estado | `awaiting-review` |
+| Estado | `done` |
 | Autor | Codex |
 | Propietario | Marcos Di Caprio |
 | Creada | 2026-10-08 |
@@ -76,3 +76,6 @@ El usuario puede ajustar el umbral propuesto de 1366 px tras la revisión.
 |---|---|---|
 | 2026-10-08 | `in-progress` | Petición explícita del usuario: «me gustaría que agregues un responsive más de Laptop». |
 | 2026-10-08 | `awaiting-review` | Sintaxis PHP/JS y diff correctos. WP-CLI: sanitización, Grid/Flex, estilos, compatibilidad y guardado/recuperación en página temporal. Node: herencia, restablecer y CSS idéntico PHP/JS. Navegador: selector Laptop activo, frame de 1366 px, gap 24→25 heredado en Tablet, restablecer a 24, guardar y recargar; documento sin desbordamiento global a 851 px. |
+| 2026-10-08 | `done` | Cambio de estado desde MD SDD Hub (awaiting-review → done) |
+| 2026-10-08 | `done` | Revisados cambios de la persona: cierre desde MD SDD Hub coherente con todas las tareas y criterios marcados, la evidencia previa y el registro README. Comprobada por lectura la presencia de Laptop, herencia y umbral de 1366 px en código, contrato y pruebas existentes. No se ejecutaron pruebas nuevas ni se modificó código; se conserva el estado decidido por la persona. |
+| 2026-10-08 | `done` | Revisados cambios de la persona: cierre de Laptop desde MD SDD Hub coherente con todos los criterios y tareas verificados; registro sincronizado. |
